@@ -1,24 +1,57 @@
 require "rails_helper"
 
-RSpec.describe "/admin/listings", type: :request do
+RSpec.describe "/admin/apps/listings" do
   let(:admin) { create(:user, :super_admin) }
   let!(:listing) { create(:listing, user_id: admin.id) }
 
   before do
-    allow(CacheBuster).to receive(:bust_listings)
+    allow(EdgeCache::BustListings).to receive(:call)
     sign_in admin
   end
 
-  describe "PUT /admin/listings/:id" do
+  describe "PUT /admin/app/listings/:id" do
     it "clears listing cache" do
       put admin_listing_path(id: listing.id), params: {
         listing: { title: "updated" }
       }
       sidekiq_perform_enqueued_jobs
-      expect(CacheBuster).to have_received(:bust_listings)
+      expect(EdgeCache::BustListings).to have_received(:call)
     end
 
-    describe "GET /admin/listings" do
+    it "updates the organization ID" do
+      org = create(:organization)
+      put admin_listing_path(id: listing.id), params: {
+        listing: { organization_id: org.id }
+      }
+      sidekiq_perform_enqueued_jobs
+      expect(listing.reload.organization_id).to eq org.id
+    end
+
+    context "when attempting to un-publish" do
+      let!(:listing) { create(:listing, published: true) }
+
+      it "unpublishes the listing" do
+        expect do
+          put admin_listing_path(id: listing.id), params: {
+            listing: { published: "0" }
+          }
+        end.to change { listing.reload.published? }.from(true).to(false)
+      end
+    end
+
+    context "when attempting to publish" do
+      let!(:listing) { create(:listing, published: false) }
+
+      it "publishes the listing" do
+        expect do
+          put admin_listing_path(id: listing.id), params: {
+            listing: { published: "1" }
+          }
+        end.to change { listing.reload.published? }.from(false).to(true)
+      end
+    end
+
+    describe "GET /admin/app/listings" do
       let!(:unpublished_listing) { create(:listing, published: false) }
 
       it "shows published listings" do

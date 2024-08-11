@@ -1,11 +1,11 @@
 import { h } from 'preact';
 import { action } from '@storybook/addon-actions';
-import faker from 'faker';
+import faker from '@faker-js/faker';
 import { number } from '@storybook/addon-knobs';
 import { Snackbar, addSnackbarItem } from '..';
 
 export default {
-  title: '4_App Components/Snackbar/Snackbar',
+  title: 'App Components/Snackbar/Snackbar',
 };
 
 export const SimulateAddingSnackbarItems = () => {
@@ -45,6 +45,5 @@ export const SimulateAddingSnackbarItems = () => {
   );
 };
 
-SimulateAddingSnackbarItems.story = {
-  name: 'simulating adding multiple snackbar items',
-};
+SimulateAddingSnackbarItems.storyName =
+  'simulating adding multiple snackbar items';

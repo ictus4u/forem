@@ -10,7 +10,6 @@ import {
 import '../../../assets/stylesheets/articles.scss';
 
 const ICONS = {
-  REACTIONS_ICON: assetPath('reactions-stack.png'),
   COMMENTS_ICON: assetPath('comments-bubble.png'),
   VIDEO_ICON: assetPath('video-camera.svg'),
 };
@@ -20,18 +19,17 @@ const commonProps = {
 };
 
 export default {
-  title: '4_App Components/Article/User',
+  title: 'App Components/Article/User',
   decorators: [withKnobs],
 };
 
 export const UserArticle = () => (
   <Article
     {...commonProps}
-    reactionsIcon={text('reactionsIcon', ICONS.REACTIONS_ICON)}
     commentsIcon={text('commentsIcon', ICONS.COMMENTS_ICON)}
     videoIcon={text('videoIcon', ICONS.VIDEO_ICON)}
     article={object('article', userArticle)}
   />
 );
 
-UserArticle.story = { name: 'default' };
+UserArticle.storyName = 'default';

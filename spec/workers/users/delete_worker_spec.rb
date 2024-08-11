@@ -6,6 +6,10 @@ RSpec.describe Users::DeleteWorker, type: :worker do
   let(:mailer) { double }
   let(:message_delivery) { double }
 
+  before do
+    allow(ForemInstance).to receive(:smtp_enabled?).and_return(true)
+  end
+
   describe "#perform" do
     let!(:user) { create(:user) }
     let(:delete) { Users::Delete }
@@ -45,6 +49,12 @@ RSpec.describe Users::DeleteWorker, type: :worker do
         expect(mailer_class).to have_received(:with).with(name: user.name, email: user.email)
         expect(mailer).to have_received(:account_deleted_email)
         expect(message_delivery).to have_received(:deliver_now)
+      end
+
+      it "creates a gdpr-delete record" do
+        expect do
+          worker.perform(user.id, true)
+        end.to change(GDPRDeleteRequest, :count).by(1)
       end
     end
 

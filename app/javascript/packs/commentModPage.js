@@ -1,18 +1,32 @@
-function applyReactedClass(category) {
-  const upVote = document.querySelector("[data-category='thumbsup']");
-  const downVote = document.querySelector("[data-category='thumbsdown']");
-  const vomitVote = document.querySelector("[data-category='vomit']");
+import { updateExperienceLevel } from '../actionsPanel/actionsPanel';
 
-  if (category === 'thumbsup') {
-    downVote.classList.remove('reacted');
-    vomitVote.classList.remove('reacted');
-  } else {
-    upVote.classList.remove('reacted');
+/**
+ * A thumbsup reaction on a comment/article will invalidate a previous thumbsdown
+ * or vomit reaction (they will be deleted on the server by the reaction handler)
+ * and vice versa. This function updates the UI to match.
+ * @param {HTMLButtonElement} clickedBtn The reaction button that was clicked
+ */
+function toggleContradictoryReactions(clickedBtn) {
+  const contentActions = document.querySelector('#content-mod-actions');
+
+  if (clickedBtn.parentElement === contentActions) {
+    const upVote = contentActions.querySelector("[data-category='thumbsup']");
+    const downVote = contentActions.querySelector(
+      "[data-category='thumbsdown']",
+    );
+    const vomitVote = contentActions.querySelector("[data-category='vomit']");
+
+    if (clickedBtn.dataset.category === 'thumbsup') {
+      downVote.classList.remove('reacted');
+      vomitVote.classList.remove('reacted');
+    } else {
+      upVote.classList.remove('reacted');
+    }
   }
 }
 
-async function updateMainReactions(reactableType, category, reactableId) {
-  const clickedBtn = document.querySelector(`[data-category="${category}"]`);
+async function updateMainReactions(clickedBtn) {
+  const { reactableType, category, reactableId } = clickedBtn.dataset;
   try {
     const response = await fetch('/reactions', {
       method: 'POST',
@@ -32,6 +46,7 @@ async function updateMainReactions(reactableType, category, reactableId) {
     const outcome = await response.json();
 
     if (outcome.result === 'create') {
+      toggleContradictoryReactions(clickedBtn);
       clickedBtn.classList.add('reacted');
     } else if (outcome.result === 'destroy') {
       clickedBtn.classList.remove('reacted');
@@ -48,77 +63,33 @@ async function updateMainReactions(reactableType, category, reactableId) {
 }
 
 // Experience-Level JS
-function clearExpLevels() {
-  Array.from(
-    document.getElementsByClassName('level-rating-button selected'),
-  ).forEach((el) => {
-    el.classList.remove('selected');
-  });
-}
-
-async function updateExperienceLevel(currentUserId, articleId, rating, group) {
-  try {
-    const response = await fetch('/rating_votes', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'X-CSRF-Token': window.csrfToken,
-        'Content-Type': 'application/json',
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        user_id: currentUserId,
-        article_id: articleId,
-        rating,
-        group,
-      }),
+Array.from(document.getElementsByClassName('level-rating-button')).forEach(
+  (btn) => {
+    btn.addEventListener('click', () => {
+      updateExperienceLevel(
+        btn.dataset.userId,
+        btn.dataset.articleId,
+        btn.value,
+        btn.dataset.group,
+      );
     });
-
-    const outcome = await response.json();
-
-    if (outcome.result === 'Success') {
-      clearExpLevels();
-      document
-        .getElementById(`js__rating__vote__${rating}`)
-        .classList.add('selected');
-    } else {
-      // eslint-disable-next-line no-alert
-      alert(outcome.error);
-    }
-  } catch (error) {
-    // eslint-disable-next-line no-alert
-    alert(error);
-  }
-}
-
-document.querySelectorAll('.level-rating-button').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    updateExperienceLevel(
-      btn.dataset.userId,
-      btn.dataset.articleId,
-      btn.value,
-      btn.dataset.group,
-    );
-  });
-});
+  },
+);
 
 document
   .querySelectorAll('.reaction-button, .reaction-vomit-button')
   .forEach((btn) => {
-    btn.addEventListener('click', () => {
-      applyReactedClass(btn.dataset.category);
-      updateMainReactions(
-        btn.dataset.reactableType,
-        btn.dataset.category,
-        btn.dataset.reactableId,
-      );
+    btn.addEventListener('click', async () => {
+      await updateMainReactions(btn);
     });
   });
 
 const form = document.getElementsByClassName('button_to')[0];
-form.addEventListener('submit', (e) => {
-  e.preventDefault();
-  if (confirm('Are you SURE you want to delete this comment?')) {
-    form.submit();
-  }
-});
+if (form) {
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (confirm('Are you SURE you want to delete this comment?')) {
+      form.submit();
+    }
+  });
+}

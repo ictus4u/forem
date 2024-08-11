@@ -1,12 +1,11 @@
 module Audit
+  ##
+  # Main class for wrapping ActiveSupport Instrumentation API.
+  #
+  # This class represent main entry point for receiving and notifying custom
+  # events, implemented according to
+  # https://guides.rubyonrails.org/active_support_instrumentation.html#creating-custom-events
   class Notification
-    ##
-    # Main class for wrapping ActiveSupport Instrumentation API.
-    #
-    # This class represent main entry point for receiving and notifying custom
-    # events, implemented according to
-    # https://guides.rubyonrails.org/active_support_instrumentation.html#creating-custom-events
-
     class << self
       include Audit::Helper
 
@@ -22,9 +21,8 @@ module Audit
       #   payload.user_id = current_user.id
       #   payload.roles = current_user.roles.pluck(:name)
       # end
-
       def notify(listener, &block)
-        return unless block_given?
+        return unless block
 
         ActiveSupport::Notifications.instrument(instrument_name(listener), Audit::Event::Payload.new(&block))
       end
@@ -32,7 +30,6 @@ module Audit
       ##
       # Audit::Notification.listen receives Events sent from ActiveSupport Instrumentation API.
       # Then, this event is serialized and send to background job.
-
       def listen(*args)
         event = ActiveSupport::Notifications::Event.new(*args)
         AuditLog.create!(params_hash(event))

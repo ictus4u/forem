@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe Listing, type: :model do
+RSpec.describe Listing do
   let(:user) { create(:user) }
   let(:organization) { create(:organization) }
   let(:listing) { create(:listing, user: user) }
@@ -9,10 +9,15 @@ RSpec.describe Listing, type: :model do
   # This may apply default parser on area that should not use it.
   after { ActsAsTaggableOn.default_parser = ActsAsTaggableOn::DefaultParser }
 
+  describe "class methods" do
+    subject(:klass) { described_class }
+
+    it { is_expected.to respond_to(:feature_enabled?) }
+  end
+
   it { is_expected.to validate_presence_of(:title) }
   it { is_expected.to validate_presence_of(:body_markdown) }
   it { is_expected.to have_many(:credits) }
-  it { is_expected.to have_many(:endorsements) }
 
   describe "valid associations" do
     it "is not valid w/o user and org" do
@@ -40,7 +45,7 @@ RSpec.describe Listing, type: :model do
 
     it "accepts 8 tags or less" do
       listing.tag_list = "a, b, c, d, e, f, g"
-      expect(listing.valid?).to eq(true)
+      expect(listing.valid?).to be(true)
     end
 
     it "cleans images" do
@@ -51,7 +56,7 @@ RSpec.describe Listing, type: :model do
 
     it "doesn't accept more than 8 tags" do
       listing.tag_list = "a, b, c, d, e, f, g, h, z, t, s, p"
-      expect(listing.valid?).to eq(false)
+      expect(listing.valid?).to be(false)
       expect(listing.errors[:tag_list]).to be_truthy
     end
 
@@ -70,24 +75,6 @@ RSpec.describe Listing, type: :model do
 
       expect { listing.destroy }.not_to change(Credit, :count)
       expect(credit.reload.purchase).to be_nil
-    end
-  end
-
-  describe "#after_commit" do
-    it "on update enqueues worker to index tag to elasticsearch" do
-      listing.save
-
-      sidekiq_assert_enqueued_with(job: Search::IndexWorker, args: [described_class.to_s, listing.id]) do
-        listing.save
-      end
-    end
-
-    it "on destroy enqueues job to delete listing from elasticsearch" do
-      listing.save
-      sidekiq_assert_enqueued_with(job: Search::RemoveFromIndexWorker,
-                                   args: [described_class::SEARCH_CLASS.to_s, listing.id]) do
-        listing.destroy
-      end
     end
   end
 end

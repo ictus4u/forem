@@ -8,25 +8,37 @@ class FeedbackMessage < ApplicationRecord
   has_one :email_message, dependent: :nullify
   has_many :notes, as: :noteable, inverse_of: :noteable, dependent: :destroy
 
+  REPORTER_UNIQUENESS_SCOPE = %i[reported_url feedback_type].freeze
+  CATEGORIES = ["spam", "other", "rude or vulgar", "harassment", "bug", "listings"].freeze
+  STATUSES = %w[Open Invalid Resolved].freeze
+
+  def self.reporter_uniqueness_msg
+    I18n.t("models.feedback_message.reported")
+  end
+
+  scope :open_abuse_reports, -> { where(status: "Open", feedback_type: "abuse-reports") }
+  scope :all_user_reports, lambda { |user|
+    user.reporter_feedback_messages
+      .or(user.affected_feedback_messages)
+      .or(user.offender_feedback_messages)
+  }
+
   validates :feedback_type, :message, presence: true
   validates :reported_url, :category, presence: { if: :abuse_report? }, length: { maximum: 250 }
   validates :message, length: { maximum: 2500 }
   validates :category,
             inclusion: {
-              in: ["spam", "other", "rude or vulgar", "harassment", "bug", "listings"]
+              in: CATEGORIES
             }
   validates :status,
             inclusion: {
-              in: %w[Open Invalid Resolved]
+              in: STATUSES
             }
-  validates :reporter_id, uniqueness: { scope: %i[reported_url feedback_type] }, if: :abuse_report? && :reporter_id
+  validates :reporter_id, uniqueness: { scope: REPORTER_UNIQUENESS_SCOPE, message: reporter_uniqueness_msg },
+                          if: :abuse_report? && :reporter_id
 
   def abuse_report?
     feedback_type == "abuse-reports"
-  end
-
-  def capitalize_status
-    self.status = status.capitalize if status.present?
   end
 
   def user_types(user_id)

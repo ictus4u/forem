@@ -1,5 +1,6 @@
 import { h, Component } from 'preact';
 import PropTypes from 'prop-types';
+import { ButtonNew as Button } from '@crayons';
 
 export class SingleRepo extends Component {
   constructor(props) {
@@ -11,11 +12,7 @@ export class SingleRepo extends Component {
   forkLabel = () => {
     const { fork } = this.props;
     if (fork) {
-      return (
-        <span className="crayons-indicator crayons-indicator--accent">
-          fork
-        </span>
-      );
+      return <span className="c-indicator c-indicator--warning">fork</span>;
     }
     return null;
   };
@@ -67,16 +64,16 @@ export class SingleRepo extends Component {
     return (
       <div className={this.githubRepoClassName()}>
         <div className="github-repo-row-name">
-          <button
-            className="cta"
-            type="button"
+          <div className="github-repo-row-label">
+            {name}
+            {this.forkLabel()}
+          </div>
+          <Button
             id={`github-repo-button-${githubIdCode}`}
             onClick={this.submitRepo}
           >
-            {featured ? 'REMOVE' : 'SELECT'}
-          </button>
-          {name}
-          {this.forkLabel()}
+            {featured ? 'Remove' : 'Select'}
+          </Button>
         </div>
       </div>
     );

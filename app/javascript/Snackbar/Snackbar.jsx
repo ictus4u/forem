@@ -157,8 +157,8 @@ export class Snackbar extends Component {
           this.element = element;
         }}
       >
-        {snacks.map(({ message, actions = [] }) => (
-          <SnackbarItem message={message} actions={actions} />
+        {snacks.map(({ message, actions = [] }, index) => (
+          <SnackbarItem message={message} actions={actions} key={index} />
         ))}
       </div>
     );
@@ -170,7 +170,7 @@ Snackbar.defaultProps = {
   pollingTime: 300,
 };
 
-Snackbar.displayName = 'SnackbarPoller';
+Snackbar.displayName = 'Snackbar';
 
 Snackbar.propTypes = {
   lifespan: PropTypes.number,

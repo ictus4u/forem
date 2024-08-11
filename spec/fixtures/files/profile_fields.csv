@@ -1,4 +1,4 @@
-Name,text_field,John Doe,,Basic
-Skills/Languages,text_area,,Programming languages,Coding
+Full test,text_field,Test,Test field,Basic,left_sidebar,true
+Test name,text_field,John Doe,,Basic,left_sidebar,false
 
-Color,color_field,#000000,"Used for backgrounds, borders etc.",Branding
+Test languages,text_area,,"Programming languages, frameworks, etc.",Coding,left_sidebar,false

@@ -1,90 +1,77 @@
 import PropTypes from 'prop-types';
-import { h, Component, Fragment } from 'preact';
-import { createPortal } from 'preact/compat';
-import { toggleFlagUserModal, FlagUserModal } from '../../packs/flagUserModal';
+import { h, Fragment } from 'preact';
 import { formatDate } from './util';
+import ExternalLinkIcon from '@images/external-link.svg';
 
-export default class SingleArticle extends Component {
-  activateToggle = (e) => {
-    e.preventDefault();
-    const { id, path, toggleArticle } = this.props;
+export const SingleArticle = ({
+  id,
+  title,
+  publishedAt,
+  cachedTagList,
+  nthPublishedByAuthor,
+  user,
+  key,
+  articleOpened,
+  path,
+  toggleArticle,
+}) => {
+  const activateToggle = () => toggleArticle(id, title, path);
 
-    toggleArticle(id, path);
+  const tagsFormat = (tag, key) => {
+    if (tag) {
+      return (
+        <span className="crayons-tag" key={key}>
+          <span className="crayons-tag__prefix">#</span>
+          {tag}
+        </span>
+      );
+    }
   };
 
-  render() {
-    const {
-      id,
-      title,
-      publishedAt,
-      cachedTagList,
-      user,
-      key,
-      articleOpened,
-      path,
-    } = this.props;
-    const tags = cachedTagList.split(', ').map((tag) => {
-      if (tag) {
-        return (
-          <span className="crayons-tag" key={key}>
-            <span className="crayons-tag__prefix">#</span>
-            {tag}
-          </span>
-        );
-      }
-    });
+  const tags = cachedTagList.split(', ').map((tag) => tagsFormat(tag, key));
 
-    const newAuthorNotification = user.articles_count <= 3 ? '👋 ' : '';
-    const modContainer = id
-      ? document.getElementById(`mod-iframe-${id}`)
-      : document.getElementById('mod-container');
+  const newAuthorNotification = nthPublishedByAuthor <= 3 ? '👋 ' : '';
 
-    // Check whether context is ModCenter or Friday-Night-Mode
-    if (modContainer) {
-      modContainer.addEventListener('load', () => {
-        modContainer.contentWindow.document
-          .getElementById('open-flag-user-modal')
-          .addEventListener('click', toggleFlagUserModal);
-      });
-    }
-
-    return (
-      <Fragment>
-        {modContainer &&
-          createPortal(
-            <FlagUserModal moderationUrl={path} authorId={user.id} />,
-            document.querySelector('.flag-user-modal-container'),
-          )}
-        <button
-          data-testid={`mod-article-${id}`}
-          type="button"
-          className="moderation-single-article"
-          onClick={this.activateToggle}
-        >
-          <span className="article-title">
-            <header>
-              <h3 className="fs-base fw-bold lh-tight">{title}</h3>
-            </header>
-            {tags}
-          </span>
-          <span className="article-author fs-s lw-medium lh-tight">
-            {newAuthorNotification}
-            {user.name}
-          </span>
-          <span className="article-published-at fs-s fw-bold lh-tight">
-            <time dateTime={publishedAt}>{formatDate(publishedAt)}</time>
-          </span>
-          <div
-            className={`article-iframes-container ${
-              articleOpened ? 'opened' : ''
-            }`}
-            id={`article-iframe-${id}`}
-          />
-        </button>
-      </Fragment>
-    );
-  }
-}
+  return (
+    <Fragment>
+      <details
+        id={`mod-article-${id}`}
+        data-testid={`mod-article-${id}`}
+        className="moderation-single-article"
+        onToggle={activateToggle}
+      >
+        <summary>
+          <div className="article-details-container">
+            <a href={path}>
+              <ExternalLinkIcon aria-label="Open in new tab" className="link-icon" />
+            </a>
+            <span className="article-title">
+              <header>
+                <h3 className="fs-base fw-bold lh-tight article-title-heading">
+                  {title}
+                </h3>
+              </header>
+              {tags}
+            </span>
+            <span className="article-author">
+              {newAuthorNotification}
+              {user.name}
+            </span>
+            <span className="article-published-at">
+              <time dateTime={publishedAt}>{formatDate(publishedAt)}</time>
+            </span>
+          </div>
+        </summary>
+        <div
+          className={`article-iframes-container${
+            articleOpened ? ' opened' : ''
+          }`}
+          id={`article-iframe-${id}`}
+        />
+      </details>
+    </Fragment>
+  );
+};
 
 SingleArticle.propTypes = {
   id: PropTypes.number.isRequired,

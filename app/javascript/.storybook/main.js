@@ -2,14 +2,37 @@ const path = require('path');
 const marked = require('marked');
 const renderer = new marked.Renderer();
 
+const prettierConfig = require('../../../.prettierrc.json');
+
 module.exports = {
-  stories: ['../**/__stories__/*.stories.jsx'],
+  core: {
+    builder: 'webpack5',
+  },
+  // https://github.com/storybookjs/storybook/blob/next/MIGRATION.md#correct-globs-in-mainjs
+  stories: ['../**/__stories__/*.stories.@(mdx|jsx)'],
   addons: [
+    '@storybook/addon-controls',
     '@storybook/addon-knobs',
     '@storybook/addon-actions',
-    '@storybook/addon-links',
     '@storybook/addon-a11y',
-    '@storybook/addon-notes/register-panel',
+    '@storybook/addon-backgrounds',
+    '@etchteam/storybook-addon-css-variables-theme',
+    'storybook-addon-jsx',
+    '@whitespace/storybook-addon-html',
+    {
+      name: '@storybook/addon-storysource',
+      loaderOptions: {
+        prettierConfig,
+      },
+    },
+    {
+      name: '@storybook/addon-docs',
+      options: {
+        configureJSX: true,
+        babelOptions: {},
+        sourceLoaderOptions: null,
+      },
+    },
   ],
   webpackFinal: async (config, { configType }) => {
     config.module.rules.push({
@@ -49,9 +72,37 @@ module.exports = {
       alias: {
         ...config.resolve.alias,
         '@crayons': path.resolve(__dirname, '../crayons'),
+        '@utilities': path.resolve(__dirname, '../utilities'),
+        '@images': path.resolve(__dirname, '../../assets/images'),
+        '@components': path.resolve(__dirname, '../shared/components'),
+        react: 'preact/compat',
+        'react-dom': 'preact/compat',
       },
     };
 
     return config;
   },
+  babel: async (options) => ({
+    ...options,
+    plugins: [
+      ...options.plugins,
+      [
+        'inline-react-svg',
+        {
+          svgo: {
+            plugins: [
+              {
+                name: 'preset-default',
+                params: {
+                  overrides: {
+                    removeViewBox: false,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      ],
+    ],
+  }),
 };

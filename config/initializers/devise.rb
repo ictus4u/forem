@@ -1,18 +1,43 @@
-TWITTER_OMNIAUTH_SETUP = lambda do |env|
-  env["omniauth.strategy"].options[:consumer_key] = SiteConfig.twitter_key
-  env["omniauth.strategy"].options[:consumer_secret] = SiteConfig.twitter_secret
+Rails.root.glob("lib/omni_auth/strategies/*.rb").each do |filename|
+  require_dependency filename
 end
 
-GITHUB_OMNIUATH_SETUP = lambda do |env|
-  env["omniauth.strategy"].options[:client_id] = SiteConfig.github_key
-  env["omniauth.strategy"].options[:client_secret] = SiteConfig.github_secret
+FOREM_OMNIAUTH_SETUP = lambda do |env|
+  env["omniauth.strategy"].options[:client_id] = Settings::Authentication.forem_key
+  env["omniauth.strategy"].options[:client_secret] = Settings::Authentication.forem_secret
+end
+
+TWITTER_OMNIAUTH_SETUP = lambda do |env|
+  env["omniauth.strategy"].options[:consumer_key] = Settings::Authentication.twitter_key
+  env["omniauth.strategy"].options[:consumer_secret] = Settings::Authentication.twitter_secret
+end
+
+GITHUB_OMNIAUTH_SETUP = lambda do |env|
   env["omniauth.strategy"].options[:scope] = "user:email"
+  env["omniauth.strategy"].options[:client_id] = Settings::Authentication.github_key
+  env["omniauth.strategy"].options[:client_secret] = Settings::Authentication.github_secret
+end
+
+GOOGLE_OAUTH2_OMNIAUTH_SETUP = lambda do |env|
+  env["omniauth.strategy"].options[:scope] = "email,profile"
+  env["omniauth.strategy"].options[:client_id] = Settings::Authentication.google_oauth2_key
+  env["omniauth.strategy"].options[:client_secret] = Settings::Authentication.google_oauth2_secret
 end
 
 FACEBOOK_OMNIAUTH_SETUP = lambda do |env|
-  env["omniauth.strategy"].options[:client_id] = SiteConfig.facebook_key
-  env["omniauth.strategy"].options[:client_secret] = SiteConfig.facebook_secret
+  env["omniauth.strategy"].options[:scope] = "email"
+  env["omniauth.strategy"].options[:client_id] = Settings::Authentication.facebook_key
+  env["omniauth.strategy"].options[:client_secret] = Settings::Authentication.facebook_secret
   env["omniauth.strategy"].options[:token_params][:parse] = :json
+end
+
+APPLE_OMNIAUTH_SETUP = lambda do |env|
+  env["omniauth.strategy"].options[:scope] = "email name"
+  env["omniauth.strategy"].options[:client_id] = Settings::Authentication.apple_client_id
+  env["omniauth.strategy"].options[:key_id] = Settings::Authentication.apple_key_id
+  env["omniauth.strategy"].options[:pem] = Settings::Authentication.apple_pem.to_s.gsub("\\n", "\n")
+  env["omniauth.strategy"].options[:provider_ignores_state] = true
+  env["omniauth.strategy"].options[:team_id] = Settings::Authentication.apple_team_id
 end
 
 Devise.setup do |config|
@@ -26,10 +51,11 @@ Devise.setup do |config|
   # Configure the e-mail address which will be shown in Devise::Mailer,
   # note that it will be overwritten if you use your own mailer class
   # with default "from" parameter.
-  config.mailer_sender = "#{ENV['COMMUNITY_NAME']} <#{ENV['DEFAULT_EMAIL']}>"
+  config.mailer_sender = "#{ENV.fetch('COMMUNITY_NAME', nil)} <#{ENV.fetch('DEFAULT_EMAIL', nil)}>"
 
   # Configure the class responsible to send e-mails.
   # config.mailer = 'Devise::Mailer'
+  config.mailer = "DeviseMailer"
 
   # ==> ORM configuration
   # Load and configure the ORM. Supports :active_record (default) and
@@ -86,7 +112,7 @@ Devise.setup do |config|
   # It will change confirmation, password recovery and other workflows
   # to behave the same regardless if the e-mail provided was right or wrong.
   # Does not affect registerable.
-  # config.paranoid = true
+  config.paranoid = true
 
   # By default Devise will store the user in session. You can skip storage for
   # particular strategies by setting this option.
@@ -301,7 +327,10 @@ Devise.setup do |config|
 
   # Fun fact, unless Twitter is last, it doesn't work for some reason.
   config.omniauth :facebook, setup: FACEBOOK_OMNIAUTH_SETUP
-  config.omniauth :github, setup: GITHUB_OMNIUATH_SETUP
+  config.omniauth :github, setup: GITHUB_OMNIAUTH_SETUP
+  config.omniauth :google_oauth2, setup: GOOGLE_OAUTH2_OMNIAUTH_SETUP
+  config.omniauth :apple, setup: APPLE_OMNIAUTH_SETUP
+  config.omniauth :forem, setup: FOREM_OMNIAUTH_SETUP, strategy_class: OmniAuth::Strategies::Forem
   config.omniauth :twitter, setup: TWITTER_OMNIAUTH_SETUP
 
   # ==> Warden configuration

@@ -11,7 +11,6 @@ import {
 import '../../../assets/stylesheets/articles.scss';
 
 const ICONS = {
-  REACTIONS_ICON: assetPath('reactions-stack.png'),
   COMMENTS_ICON: assetPath('comments-bubble.png'),
   VIDEO_ICON: assetPath('video-camera.svg'),
 };
@@ -21,14 +20,13 @@ const commonProps = {
 };
 
 export default {
-  title: '4_App Components/Article/Podcast',
+  title: 'App Components/Article/Podcast',
   decorators: [withKnobs],
 };
 
 export const Podcast = () => (
   <Article
     {...commonProps}
-    reactionsIcon={text('reactionsIcon', ICONS.REACTIONS_ICON)}
     commentsIcon={text('commentsIcon', ICONS.COMMENTS_ICON)}
     videoIcon={text('videoIcon', ICONS.VIDEO_ICON)}
     isBookmarked={boolean('isBookmarked', false)}
@@ -37,14 +35,11 @@ export const Podcast = () => (
   />
 );
 
-Podcast.story = {
-  name: 'podcast',
-};
+Podcast.storyName = 'podcast';
 
 export const PodcastEpisode = () => (
   <Article
     {...commonProps}
-    reactionsIcon={text('reactionsIcon', ICONS.REACTIONS_ICON)}
     commentsIcon={text('commentsIcon', ICONS.COMMENTS_ICON)}
     videoIcon={text('videoIcon', ICONS.VIDEO_ICON)}
     isBookmarked={boolean('isBookmarked', false)}
@@ -53,4 +48,4 @@ export const PodcastEpisode = () => (
   />
 );
 
-PodcastEpisode.story = { name: 'podcast episode' };
+PodcastEpisode.storyName = 'podcast episode';

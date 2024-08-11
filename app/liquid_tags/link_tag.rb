@@ -16,16 +16,24 @@ class LinkTag < LiquidTagBase
   end
 
   def get_article(slug)
-    slug = ActionController::Base.helpers.strip_tags(slug).strip
+    slug = strip_tags(slug.strip)
     find_article_by_user(article_hash(slug)) || find_article_by_org(article_hash(slug))
   end
 
   def article_hash(slug)
-    path = Addressable::URI.parse(slug).path
+    url = Addressable::URI.parse(slug)
+    domain = url.port ? "#{url.host}:#{url.port}" : url.host
+    path = url.path
+
+    # If domain is present in url check if it belongs to the app
+    unless domain.blank? || domain&.casecmp?(Settings::General.app_domain)
+      raise StandardError, I18n.t("liquid_tags.link_tag.not_exist_link", slug: slug)
+    end
+
     path.slice!(0) if path.starts_with?("/") # remove leading slash if present
     path.slice!(-1) if path.ends_with?("/") # remove trailing slash if present
     extracted_hash = Addressable::Template.new("{username}/{slug}").extract(path)&.symbolize_keys
-    raise StandardError, "This URL is not an article link: {% link #{slug} %}" unless extracted_hash
+    raise StandardError, I18n.t("liquid_tags.link_tag.not_exist", slug: slug) unless extracted_hash
 
     extracted_hash
   end

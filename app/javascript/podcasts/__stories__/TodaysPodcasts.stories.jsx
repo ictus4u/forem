@@ -14,15 +14,15 @@ const episodes = [
 ];
 
 export default {
-  title: `4_App Components/Podcasts/Today's Episodes`,
+  title: `App Components/Podcasts/Today's Episodes`,
 };
 
 export const Standard = () => (
   <TodaysPodcasts>
     {episodes.map((episode) => (
-      <PodcastEpisode episode={episode} />
+      <PodcastEpisode key={episode.id} episode={episode} />
     ))}
   </TodaysPodcasts>
 );
 
-Standard.story = { name: 'standard' };
+Standard.storyName = 'standard';

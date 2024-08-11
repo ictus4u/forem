@@ -7,26 +7,42 @@ FactoryBot.define do
   image_path = Rails.root.join("spec/support/fixtures/images/image1.jpeg")
 
   factory :user do
-    name                         { Faker::Name.name }
-    email                        { generate :email }
-    username                     { generate :username }
+    # Creating a name that has includes double quotes and backslashes.
+    # This way we can see if things are parsing correctly.
+    name do
+      "#{Faker::Name.first_name} \"#{Faker::Name.first_name}\" \\:/ #{Faker::Name.last_name}"
+    end
+    email                        { generate(:email) }
+    username                     { generate(:username) }
     profile_image                { Rack::Test::UploadedFile.new(image_path, "image/jpeg") }
-    twitter_username             { generate :twitter_username }
-    github_username              { generate :github_username }
-    summary                      { Faker::Lorem.paragraph[0..rand(190)] }
-    website_url                  { Faker::Internet.url }
+    twitter_username             { generate(:twitter_username) }
+    github_username              { generate(:github_username) }
     confirmed_at                 { Time.current }
     saw_onboarding               { true }
     checked_code_of_conduct      { true }
     checked_terms_and_conditions { true }
-    display_announcements        { true }
     registered_at                { Time.current }
     signup_cta_variant           { "navbar_basic" }
-    email_digest_periodic        { false }
-    bg_color_hex                 { Faker::Color.hex_color }
-    text_color_hex               { Faker::Color.hex_color }
 
     trait :with_identity do
+      transient do
+        identities { Authentication::Providers.available }
+        uid { nil }
+      end
+
+      after(:create) do |user, options|
+        options.identities.each do |provider|
+          auth = OmniAuth.config.mock_auth.fetch(provider.to_sym)
+          create(
+            :identity,
+            user: user, provider: provider, uid: options.uid || auth.uid, auth_data_dump: auth,
+          )
+        end
+      end
+    end
+
+    trait :with_broken_identity do
+      # Mimics a situation that can occur in production
       transient { identities { Authentication::Providers.available } }
 
       after(:create) do |user, options|
@@ -34,7 +50,7 @@ FactoryBot.define do
           auth = OmniAuth.config.mock_auth.fetch(provider.to_sym)
           create(
             :identity,
-            user: user, provider: provider, uid: auth.uid, auth_data_dump: auth,
+            user: user, provider: provider, uid: auth.uid, auth_data_dump: nil,
           )
         end
       end
@@ -44,8 +60,19 @@ FactoryBot.define do
       after(:build) { |user| user.add_role(:super_admin) }
     end
 
+    trait :creator do
+      after(:build) do |user|
+        user.add_role(:super_admin)
+        user.add_role(:creator)
+      end
+    end
+
     trait :admin do
       after(:build) { |user| user.add_role(:admin) }
+    end
+
+    trait :super_moderator do
+      after(:build) { |user| user.add_role(:super_moderator) }
     end
 
     trait :single_resource_admin do
@@ -54,6 +81,10 @@ FactoryBot.define do
       end
 
       after(:build) { |user, options| user.add_role(:single_resource_admin, options.resource) }
+    end
+
+    trait :tech_admin do
+      after(:build) { |user| user.add_role(:tech_admin) }
     end
 
     trait :restricted_liquid_tag do
@@ -79,19 +110,40 @@ FactoryBot.define do
       after(:build) { |user| user.add_role(:trusted) }
     end
 
-    trait :banned do
-      after(:build) { |user| user.add_role(:banned) }
+    trait :suspended do
+      after(:build) { |user| user.add_role(:suspended) }
+    end
+
+    trait :warned do
+      after(:build) { |user| user.add_role(:warned) }
+    end
+
+    trait :comment_suspended do
+      after(:build) { |user| user.add_role(:comment_suspended) }
+    end
+
+    trait :limited do
+      after(:build) { |user| user.add_role(:limited) }
+    end
+
+    trait :spam do
+      after(:build) { |user| user.add_role(:spam) }
+    end
+
+    trait :invited do
+      after(:build) do |user|
+        user.registered = false
+        user.registered_at = nil
+      end
     end
 
     trait :ignore_mailchimp_subscribe_callback do
       after(:build) do |user|
+        # rubocop:disable Lint/EmptyBlock
         user.define_singleton_method(:subscribe_to_mailchimp_newsletter) {}
+        # rubocop:enable Lint/EmptyBlock
         # user.class.skip_callback(:validates, :after_create)
       end
-    end
-
-    trait :pro do
-      after(:build) { |user| user.add_role :pro }
     end
 
     trait :org_member do
@@ -135,33 +187,19 @@ FactoryBot.define do
     trait :tag_moderator do
       after(:create) do |user|
         tag = create(:tag)
-        user.add_role :tag_moderator, tag
+        user.add_role(:tag_moderator, tag)
       end
-    end
-
-    trait :with_all_info do
-      education { "DEV University" }
-      employment_title { "Software Engineer" }
-      employer_name { "DEV" }
-      employer_url { "http://dev.to" }
-      currently_learning { "Preact" }
-      mostly_work_with { "Ruby" }
-      currently_hacking_on { "JSON-LD" }
-      mastodon_url { "https://mastodon.social/@test" }
-      facebook_url { "www.facebook.com/example" }
-      linkedin_url { "www.linkedin.com/company/example" }
-      youtube_url { "https://youtube.com/example" }
-      behance_url { "www.behance.net/#{username}" }
-      stackoverflow_url { "www.stackoverflow.com/example" }
-      dribbble_url { "www.dribbble.com/example" }
-      medium_url { "www.medium.com/example" }
-      gitlab_url { "www.gitlab.com/example" }
-      instagram_url { "www.instagram.com/example" }
-      twitch_username { "Example007" }
     end
 
     trait :without_profile do
       _skip_creating_profile { true }
+    end
+
+    trait :with_newsletters do
+      after(:create) do |user|
+        Users::NotificationSetting.find_by(user_id: user.id)
+          .update_columns(email_newsletter: true, email_digest_periodic: true)
+      end
     end
   end
 end

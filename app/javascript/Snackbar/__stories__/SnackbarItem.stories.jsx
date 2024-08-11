@@ -3,16 +3,14 @@ import { action } from '@storybook/addon-actions';
 import { SnackbarItem } from '../SnackbarItem';
 
 export default {
-  title: '4_App Components/Snackbar/SnackbarItem',
+  title: 'App Components/Snackbar/SnackbarItem',
 };
 
 export const JustAMessage = () => (
   <SnackbarItem message="File uploaded successfully" />
 );
 
-JustAMessage.story = {
-  name: 'message only',
-};
+JustAMessage.storyName = 'message only';
 
 export const WithOneAction = () => (
   <SnackbarItem
@@ -21,9 +19,7 @@ export const WithOneAction = () => (
   />
 );
 
-WithOneAction.story = {
-  name: 'with one action',
-};
+WithOneAction.storyName = 'with one action';
 
 export const WithActions = () => (
   <SnackbarItem
@@ -35,6 +31,4 @@ export const WithActions = () => (
   />
 );
 
-WithActions.story = {
-  name: 'with actions',
-};
+WithActions.storyName = 'with actions';

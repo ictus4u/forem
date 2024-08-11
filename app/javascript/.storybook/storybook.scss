@@ -1,15 +1,25 @@
 body {
-  margin: 0;
-  padding: 0;
-
+  background: unset;
   // This should be Storybook's root element.
   #root {
-    display: grid;
-    grid-template-rows: 1fr;
-    grid-template-columns: 1fr;
     padding: 2rem;
-    justify-items: center;
-    align-items: center;
-    height: 100vh;
   }
+
+  .sbdocs-ul,
+  .sbdocs-ol {
+    list-style: revert;
+    margin: revert;
+    padding: revert;
+  }
+
+  code {
+    all: revert;
+  }
+
+  .docblock-source {
+    margin: revert;
+  }
+}
+.sb-show-main {
+  transition: unset !important;
 }

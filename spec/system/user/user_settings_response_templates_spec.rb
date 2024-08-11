@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "User uses response templates settings", type: :system do
+RSpec.describe "User uses response templates settings" do
   let(:user) { create(:user) }
   let(:response_template) { create(:response_template, user: user) }
 
@@ -18,11 +18,11 @@ RSpec.describe "User uses response templates settings", type: :system do
         expect(page).to have_current_path "/settings/response-templates/#{response_template.id}", ignore_query: true
       end
 
-      it "shows the proper message when deleting a reponse template", js: true do
-        visit "/settings/response-templates"
+      it "shows the proper message when deleting a response template", js: true do
+        visit "/settings/extensions"
         expect(page).to have_text(response_template.title)
 
-        expect(page).to have_css(".github-repo-row-name", text: response_template.title)
+        expect(page).to have_css(".flex-1", text: response_template.title)
         begin
           accept_confirm { click_button("Remove") }
         rescue Capybara::ModalNotFound => e

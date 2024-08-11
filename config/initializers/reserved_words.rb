@@ -26,7 +26,6 @@ class ReservedWords
     bit
     bits
     blocks
-    buffered_articles
     butt
     byte
     bytes
@@ -34,7 +33,6 @@ class ReservedWords
     challenge
     changelog
     chat
-    chat_channels
     code
     code-of-conduct
     coffee
@@ -118,10 +116,11 @@ class ReservedWords
     links
     linux
     listen
+    listing
+    listings
     live
     live_articles
     loop
-    mac
     machinelearning
     mag
     magazine
@@ -172,6 +171,8 @@ class ReservedWords
     questions
     rails
     reactions
+    react
+    reactjs
     readinglist
     repo
     report-abuse

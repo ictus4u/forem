@@ -2,20 +2,27 @@
   Hey <%= @user.name %>!
 </p>
 <p>
-  This is an email to let you know that we've upgraded your account to have <b>basic moderation privileges</b>.
-  This means you can apply "negative reactions" to posts as well as certain other actions which help us maintain a constructive community and uphold our <a href="<%= app_url(code_of_conduct_path) %>">code of conduct</a>.
+  Good news! You’ve been granted Trusted Member permissions on <%= community_name %>!
 </p>
 <p>
-  There are no specific responsibilities with this new privilege except that you use it respectfully and empathetically. If for any reason you'd like to forego these new features, let us know.
+  <b>From now on, a shield icon will be visible on post pages. Simply click on it to take <em>private</em> actions on community content.</b>
 </p>
 <p>
-  You'll occasionally get on-site notifications asking you to take an action. You are never required to take any actions and feel free to unsubscribe in <a href="<%= app_url(user_settings_path(:notifications)) %>">your notification settings</a> at any point without giving up the rest of the features.
+  Here's an overview of your new abilities:
+  <ul>
+    <li>Rank content (👎👍) with emoji reactions</li>
+    <li>Rate the experience level of posts</li>
+    <li>Use the Flag to Admins icon 🧐 to report problematic content</li>
+  </ul>
+</p>
+<% if Page.find_by(slug: "trusted-member") %>
+  <p>
+    <mark>Visit the <b><a href="<%= app_url("trusted-member") %>">Trusted Member Guide</a></b> for full details on your new role and instructions on how to get started.</mark>.
+  </p>
+<% end %>
+<p>
+  Thank you for being an awesome member of our community. Let’s work together to create a welcoming and constructive space!
 </p>
 <p>
-  <b><a href="<%= app_url("/community-moderation") %>">Click here for full details about basic mod privileges.</b></a>
-</p>
-<p>
-  Happy <%= SiteConfig.community_action %>!
-  <br>
-  - <%= community_name %> Team
+  <%= community_name %> Team
 </p>

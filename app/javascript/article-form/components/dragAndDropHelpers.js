@@ -15,7 +15,11 @@ export function matchesDataTransferType(
 }
 
 // TODO: Document functions
-export function handleImageDrop(handleImageSuccess, handleImageFailure) {
+export function handleImageDrop(
+  handleImageUploading,
+  handleImageSuccess,
+  handleImageFailure,
+) {
   return function (event) {
     event.preventDefault();
 
@@ -37,7 +41,12 @@ export function handleImageDrop(handleImageSuccess, handleImageFailure) {
       return;
     }
 
-    processImageUpload(files, handleImageSuccess, handleImageFailure);
+    processImageUpload(
+      files,
+      handleImageUploading,
+      handleImageSuccess,
+      handleImageFailure,
+    );
   };
 }
 
@@ -48,9 +57,7 @@ export function handleImageDrop(handleImageSuccess, handleImageFailure) {
  */
 export function onDragOver(event) {
   event.preventDefault();
-  event.currentTarget
-    .closest('.drop-area')
-    .classList.add('drop-area--active');
+  event.currentTarget.closest('.drop-area').classList.add('drop-area--active');
 }
 
 /**

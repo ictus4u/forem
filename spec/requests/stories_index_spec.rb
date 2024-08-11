@@ -1,144 +1,198 @@
 require "rails_helper"
 
-RSpec.shared_examples "redirects to the lowercase route" do
-  context "when a path contains uppercase characters" do
-    it "redirects to the lowercase route" do
-      get path
-      expect(response).to have_http_status(:moved_permanently)
-      expect(response).to redirect_to(path.downcase)
-    end
-  end
-end
+RSpec.describe "StoriesIndex" do
+  it "redirects to the lowercase route", :aggregate_failures do
+    get "/Bad_name"
+    expect(response).to have_http_status(:moved_permanently)
+    expect(response).to redirect_to("/bad_name")
 
-RSpec.describe "StoriesIndex", type: :request do
+    get "/Bad_name?i=i"
+    expect(response).to have_http_status(:moved_permanently)
+    expect(response).to redirect_to("/bad_name?i=i")
+  end
+
   describe "GET stories index" do
-    it "renders page with article list" do
+    let(:user) { create(:user) }
+    let(:org) { create(:organization) }
+
+    it "renders head content if present" do
+      allow(Settings::UserExperience).to receive(:head_content).and_return("head content")
+      get "/"
+      expect(response.body).to include("head content")
+    end
+
+    it "renders bottom of body content if present" do
+      allow(Settings::UserExperience).to receive(:bottom_of_body_content).and_return("bottom of body content")
+      get "/"
+      expect(response.body).to include("bottom of body content")
+    end
+
+    it "renders page with article list and proper attributes", :aggregate_failures do
       article = create(:article, featured: true)
+      navigation_link = create(:navigation_link)
 
       get "/"
       expect(response.body).to include(CGI.escapeHTML(article.title))
+      renders_ga_tracking_fields
+      renders_proper_description
+      renders_min_read_time
+      renders_proper_sidebar(navigation_link)
     end
 
-    it "has data-ga-tracking" do
+    it "doesn't render a featured scheduled article" do
+      article = create(:article, featured: true, published_at: 1.hour.from_now)
       get "/"
-      expect(response.body).to include("data-ga-tracking=\"#{SiteConfig.ga_tracking_id}\"")
+      expect(response.body).not_to include(CGI.escapeHTML(article.title))
     end
 
-    it "renders registration page if site config is private" do
-      SiteConfig.public = false
-
-      get root_path
-      expect(response.body).to include("Continue with")
+    def renders_proper_description
+      expect(response.body).to include(Settings::Community.community_description)
     end
 
-    it "renders proper description" do
-      get "/"
-      expect(response.body).to include(SiteConfig.community_description)
-    end
-
-    it "renders page with min read" do
-      create(:article, featured: true)
-
-      get "/"
+    def renders_min_read_time
       expect(response.body).to include("min read")
     end
 
-    it "renders page with proper sidebar" do
-      get "/"
-      expect(response.body).to include("Podcasts")
+    def renders_proper_sidebar(navigation_link)
+      expect(response.body).to include(CGI.escapeHTML(navigation_link.name))
     end
 
-    it "renders left display_ads when published and approved" do
-      org = create(:organization)
-      ad = create(:display_ad, published: true, approved: true, organization: org)
+    def renders_ga_tracking_fields
+      expect(response.body).to include("data-ga-tracking=\"#{Settings::General.ga_tracking_id}\"")
+      expect(response.body).to include("data-ga4-tracking-id=\"#{Settings::General.ga_analytics_4_id}\"")
+    end
+
+    it "renders registration page if the Forem instance is private" do
+      allow(Settings::UserExperience).to receive(:public).and_return(false)
+      allow(Authentication::Providers).to receive(:enabled).and_return(%i[github twitter])
+
+      get root_path
+      expect(response.body).to include("Continue with GitHub")
+      expect(response.body).to include("Continue with Twitter")
+    end
+
+    it "renders a landing page if one is active and if the site config is set to private" do
+      allow(Settings::UserExperience).to receive(:public).and_return(false)
+      create(:page, title: "This is a landing page!", landing_page: true)
+
+      get root_path
+      expect(response.body).to include("This is a landing page!")
+    end
+
+    it "renders billboards when published and approved for sidebar right (first position)" do
+      ad = create(:billboard, published: true, approved: true, placement_area: "sidebar_right",
+                              organization: org)
+
       get "/"
       expect(response.body).to include(ad.processed_html)
     end
 
-    it "renders right display_ads when published and approved" do
-      org = create(:organization)
-      ad = create(:display_ad, published: true, approved: true, placement_area: "sidebar_right", organization: org)
+    it "renders billboards when published and approved for sidebar right (second position)" do
+      ad = create(:billboard, published: true, approved: true, placement_area: "sidebar_right_second",
+                              organization: org)
+
       get "/"
       expect(response.body).to include(ad.processed_html)
     end
 
-    it "does not render left display_ads when not approved" do
-      org = create(:organization)
-      ad = create(:display_ad, published: true, approved: false, organization: org)
+    it "renders billboards when published and approved for sidebar right (third position)" do
+      ad = create(:billboard, published: true, approved: true, placement_area: "sidebar_right_third",
+                              organization: org)
+
+      get "/"
+      expect(response.body).to include(ad.processed_html)
+    end
+
+    it "does not render billboards when not approved" do
+      ad = create(:billboard, published: true, approved: false, placement_area: "sidebar_right",
+                              organization: org)
+
       get "/"
       expect(response.body).not_to include(ad.processed_html)
     end
 
-    it "does not render right display_ads when not approved" do
-      org = create(:organization)
-      ad = create(:display_ad, published: true, approved: false, placement_area: "sidebar_right", organization: org)
+    it "renders only one billboard per placement" do
+      billboard = create(:billboard, published: true, approved: true, placement_area: "sidebar_right",
+                                     organization: org)
+      second_billboard = create(:billboard, published: true, approved: true, placement_area: "sidebar_right",
+                                            organization: org)
+
       get "/"
-      expect(response.body).not_to include(ad.processed_html)
+      expect(response.body).to include(billboard.processed_html).or(include(second_billboard.processed_html))
+      expect(response.body).to include("crayons-card crayons-card--secondary crayons-bb").once
+      expect(response.body).to include("sponsorship-dropdown-trigger-").once
     end
 
-    it "has gold sponsors displayed" do
-      org = create(:organization)
-      sponsorship = create(:sponsorship, level: "gold", tagline: "Oh Yeah!!!", status: "live", organization: org)
+    it "renders a hero billboard" do
+      allow(FeatureFlag).to receive(:enabled?).with(:hero_billboard).and_return(true)
+      billboard = create(:billboard, published: true, approved: true, placement_area: "home_hero", organization: org)
       get "/"
-      expect(response.body).to include(sponsorship.tagline)
+      expect(response.body).to include(billboard.processed_html)
     end
 
-    it "does not display silver sponsors" do
-      org = create(:organization)
-      sponsorship = create(:sponsorship, level: "silver", tagline: "Oh Yeah!!!", status: "live", organization: org)
+    it "renders a footer billboard" do
+      billboard = create(:billboard, published: true, approved: true, placement_area: "footer", organization: org)
       get "/"
-      expect(response.body).not_to include(sponsorship.tagline)
+      expect(response.body).to include(billboard.processed_html)
     end
 
-    it "does not display non live gold sponsorships" do
-      org = create(:organization)
-      sponsorship = create(:sponsorship, level: "gold", tagline: "Oh Yeah!!!", status: "pending", organization: org)
+    it "does not set cache-related headers if private" do
+      allow(Settings::UserExperience).to receive(:public).and_return(false)
       get "/"
-      expect(response.body).not_to include(sponsorship.tagline)
+      expect(response).to have_http_status(:ok)
+
+      expect(response.headers["X-Accel-Expires"]).to be_nil
+      expect(response.headers["Cache-Control"]).not_to eq("public, no-cache")
+      expect(response.headers["Surrogate-Key"]).to be_nil
     end
 
-    it "shows listings" do
-      user = create(:user)
-      listing = create(:listing, user_id: user.id)
+    it "sets correct cache headers", :aggregate_failures do
       get "/"
-      expect(response.body).to include(CGI.escapeHTML(listing.title))
+
+      expect(response).to have_http_status(:ok)
+      sets_fastly_headers
+      sets_nginx_headers
     end
 
-    it "sets Fastly Surrogate-Key headers" do
-      get "/"
-      expect(response.status).to eq(200)
-
+    def sets_fastly_headers
       expected_surrogate_key_headers = %w[main_app_home_page]
       expect(response.headers["Surrogate-Key"].split(", ")).to match_array(expected_surrogate_key_headers)
     end
 
-    it "sets Nginx X-Accel-Expires headers" do
-      get "/"
-      expect(response.status).to eq(200)
-
+    def sets_nginx_headers
       expect(response.headers["X-Accel-Expires"]).to eq("600")
     end
 
-    it "shows default meta keywords" do
-      SiteConfig.meta_keywords = { default: "cool developers, civil engineers" }
+    it "shows default meta keywords if set" do
+      allow(Settings::General).to receive(:meta_keywords).and_return({ default: "cool developers, civil engineers" })
       get "/"
       expect(response.body).to include("<meta name=\"keywords\" content=\"cool developers, civil engineers\">")
+    end
+
+    it "does not show default meta keywords if not set" do
+      allow(Settings::General).to receive(:meta_keywords).and_return({ default: "" })
+      get "/"
+      expect(response.body).not_to include(
+        "<meta name=\"keywords\" content=\"cool developers, civil engineers\">",
+      )
     end
 
     it "shows only one cover if basic feed style" do
       create_list(:article, 3, featured: true, score: 20, main_image: "https://example.com/image.jpg")
 
-      SiteConfig.feed_style = "basic"
+      allow(Settings::UserExperience).to receive(:feed_style).and_return("basic")
       get "/"
-      expect(response.body.scan(/(?=class="crayons-story__cover__image)/).count).to be 1
+      expect(response.body.scan(/(?=class="crayons-article__cover crayons-article__cover__image__feed)/).count).to be 1
     end
 
     it "shows multiple cover images if rich feed style" do
       create_list(:article, 3, featured: true, score: 20, main_image: "https://example.com/image.jpg")
 
-      SiteConfig.feed_style = "rich"
+      allow(Settings::UserExperience).to receive(:feed_style).and_return("rich")
       get "/"
-      expect(response.body.scan(/(?=class="crayons-story__cover__image)/).count).to be > 1
+      # rubocop:disable Layout/LineLength
+      expect(response.body.scan(/(?=class="crayons-article__cover crayons-article__cover__image__feed)/).count).to be > 1
+      # rubocop:enable Layout/LineLength
     end
 
     context "with campaign hero" do
@@ -154,21 +208,21 @@ RSpec.describe "StoriesIndex", type: :request do
       end
 
       it "displays hero html when it exists and is set in config" do
-        SiteConfig.campaign_hero_html_variant_name = "hero"
+        allow(Settings::Campaign).to receive(:hero_html_variant_name).and_return("hero")
 
         get root_path
         expect(response.body).to include(hero_html.html)
       end
 
-      it "doesn't display when campaign_hero_html_variant_name is not set" do
-        SiteConfig.campaign_hero_html_variant_name = ""
+      it "doesn't display when hero_html_variant_name is not set" do
+        allow(Settings::Campaign).to receive(:hero_html_variant_name).and_return("")
 
         get root_path
         expect(response.body).not_to include(hero_html.html)
       end
 
       it "doesn't display when hero html is not approved" do
-        SiteConfig.campaign_hero_html_variant_name = "hero"
+        allow(Settings::Campaign).to receive(:hero_html_variant_name).and_return("hero")
         hero_html.update_column(:approved, false)
 
         get root_path
@@ -176,299 +230,85 @@ RSpec.describe "StoriesIndex", type: :request do
       end
     end
 
-    context "with campaign_sidebar" do
+    context "with default_locale configured to fr" do
       before do
-        SiteConfig.campaign_featured_tags = "shecoded,theycoded"
-
-        a_body = "---\ntitle: Super-sheep#{rand(1000)}\npublished: true\ntags: heyheyhey,shecoded\n---\n\nHello"
-        create(:article, approved: true, body_markdown: a_body, score: 1)
-        u_body = "---\ntitle: Unapproved-post#{rand(1000)}\npublished: true\ntags: heyheyhey,shecoded\n---\n\nHello"
-        create(:article, approved: false, body_markdown: u_body, score: 1)
+        allow(Settings::UserExperience).to receive(:default_locale).and_return("fr")
+        get "/"
       end
 
-      it "doesn't display posts with the campaign tags when sidebar is disabled" do
-        SiteConfig.campaign_sidebar_enabled = false
-        get "/"
-        expect(response.body).not_to include(CGI.escapeHTML("Super-sheep"))
+      it "names proper locale" do
+        expect(I18n.locale).to eq(:fr)
       end
 
-      it "doesn't display low-score posts" do
-        SiteConfig.campaign_sidebar_enabled = true
-        SiteConfig.campaign_articles_require_approval = true
-        get "/"
-        expect(response.body).not_to include(CGI.escapeHTML("Unapproved-post"))
-      end
-
-      it "doesn't display unapproved posts" do
-        SiteConfig.campaign_sidebar_enabled = true
-        SiteConfig.campaign_sidebar_image = "https://example.com/image.png"
-        SiteConfig.campaign_articles_require_approval = true
-        Article.last.update_column(:score, -2)
-        get "/"
-        expect(response.body).not_to include(CGI.escapeHTML("Unapproved-post"))
-      end
-
-      it "displays unapproved post if approval is not required" do
-        SiteConfig.campaign_sidebar_enabled = true
-        SiteConfig.campaign_sidebar_image = "https://example.com/image.png"
-        SiteConfig.campaign_articles_require_approval = false
-        get "/"
-        expect(response.body).to include(CGI.escapeHTML("Unapproved-post"))
-      end
-
-      it "displays only approved posts with the campaign tags" do
-        SiteConfig.campaign_sidebar_enabled = false
-        get "/"
-        expect(response.body).not_to include(CGI.escapeHTML("Super-puper"))
-      end
-
-      it "displays sidebar url if campaign_url is set" do
-        SiteConfig.campaign_sidebar_enabled = true
-        SiteConfig.campaign_url = "https://campaign-lander.com"
-        SiteConfig.campaign_sidebar_image = "https://example.com/image.png"
-        get "/"
-        expect(response.body).to include('<a href="https://campaign-lander.com"')
-      end
-
-      it "does not display sidebar url if image is not present is set" do
-        SiteConfig.campaign_sidebar_enabled = true
-        SiteConfig.campaign_url = "https://campaign-lander.com"
-        get "/"
-        expect(response.body).not_to include('<a href="https://campaign-lander.com"')
+      it "has proper locale content on page" do
+        expect(response.body).to include("Recherche")
       end
     end
   end
 
-  describe "GET query page" do
-    it "renders page with proper header" do
-      get "/search?q=hello"
-      expect(response.body).to include("query-header-text")
+  describe "GET stories index with timeframe" do
+    describe "/latest" do
+      let(:user) { create(:user) }
+      let!(:low_score) { create(:article, score: -10) }
+
+      before do
+        create_list(:article, 3, score: Settings::UserExperience.home_feed_minimum_score + 1)
+      end
+
+      it "includes a link to Relevant", :aggregate_failures do
+        get "/latest"
+
+        # The link should be `/`
+        expected_tag = "<a data-text=\"Relevant\" href=\"/\""
+        expect(response.body).to include(expected_tag)
+      end
+
+      it "includes message and a link to sign in for signed-out" do
+        get "/latest"
+        expect(response.body).to include("Some latest posts are only visible for members")
+        expect(response.body).to match(/Sign in.*to see all latest/)
+      end
+
+      it "excludes low-score content for signed-out" do
+        get "/latest"
+        expect(response.body).not_to include(low_score.title)
+      end
+    end
+
+    describe "/top/week" do
+      it "includes a link to Relevant", :aggregate_failures do
+        get "/top/week"
+
+        # The link should be `/`
+        expected_tag = "<a data-text=\"Relevant\" href=\"/\""
+        expect(response.body).to include(expected_tag)
+      end
+    end
+  end
+
+  describe "GET locale index" do
+    it "names proper locale" do
+      get "/locale/fr"
+      expect(I18n.locale).to eq(:fr)
+    end
+
+    it "has proper locale content on page" do
+      get "/locale/fr"
+      expect(response.body).to include("Recherche")
+    end
+
+    it "uses fallback locale if invalid locale passed" do
+      get "/locale/fake"
+      expect(I18n.locale).to eq(:en)
     end
   end
 
   describe "GET podcast index" do
-    include_examples "redirects to the lowercase route" do
-      let(:path) { "/#{build(:podcast).slug.upcase}" }
-    end
-
     it "renders page with proper header" do
       podcast = create(:podcast)
       create(:podcast_episode, podcast: podcast)
       get "/#{podcast.slug}"
       expect(response.body).to include(podcast.title)
-    end
-  end
-
-  describe "GET tag index" do
-    let(:user) { create(:user) }
-    let(:tag) { create(:tag) }
-    let(:org) { create(:organization) }
-
-    def create_live_sponsor(org, tag)
-      create(
-        :sponsorship,
-        level: :tag,
-        blurb_html: "<p>Oh Yeah!!!</p>",
-        status: "live",
-        organization: org,
-        sponsorable: tag,
-        expires_at: 30.days.from_now,
-      )
-    end
-
-    context "with caching headers" do
-      before do
-        get "/t/#{tag.name}"
-      end
-
-      it "renders page with proper header" do
-        expect(response.body).to include(tag.name)
-      end
-
-      it "sets Fastly Cache-Control headers" do
-        expect(response.status).to eq(200)
-
-        expected_cache_control_headers = %w[public no-cache]
-        expect(response.headers["Cache-Control"].split(", ")).to match_array(expected_cache_control_headers)
-      end
-
-      it "sets Fastly Surrogate-Control headers" do
-        expect(response.status).to eq(200)
-
-        expected_surrogate_control_headers = %w[max-age=600 stale-while-revalidate=30 stale-if-error=86400]
-        expect(response.headers["Surrogate-Control"].split(", ")).to match_array(expected_surrogate_control_headers)
-      end
-
-      it "sets Fastly Surrogate-Key headers" do
-        expect(response.status).to eq(200)
-
-        expected_surrogate_key_headers = %W[articles-#{tag}]
-        expect(response.headers["Surrogate-Key"].split(", ")).to match_array(expected_surrogate_key_headers)
-      end
-
-      it "sets Nginx X-Accel-Expires headers" do
-        expect(response.status).to eq(200)
-
-        expect(response.headers["X-Accel-Expires"]).to eq("600")
-      end
-    end
-
-    it "renders page with top/week etc." do
-      get "/t/#{tag.name}/top/week"
-      expect(response.body).to include(tag.name)
-      get "/t/#{tag.name}/top/month"
-      expect(response.body).to include(tag.name)
-      get "/t/#{tag.name}/top/year"
-      expect(response.body).to include(tag.name)
-      get "/t/#{tag.name}/top/infinity"
-      expect(response.body).to include(tag.name)
-    end
-
-    it "renders tag after alias change" do
-      tag2 = create(:tag, alias_for: tag.name)
-      get "/t/#{tag2.name}"
-      expect(response.body).to redirect_to "/t/#{tag.name}"
-      expect(response).to have_http_status(:moved_permanently)
-    end
-
-    it "does not render sponsor if not live" do
-      sponsorship = create(
-        :sponsorship, level: :tag, tagline: "Oh Yeah!!!", status: "pending", organization: org, sponsorable: tag
-      )
-
-      get "/t/#{tag.name}"
-      expect(response.body).not_to include("is sponsored by")
-      expect(response.body).not_to include(sponsorship.tagline)
-    end
-
-    it "renders live sponsor" do
-      sponsorship = create_live_sponsor(org, tag)
-      get "/t/#{tag.name}"
-      expect(response.body).to include("is sponsored by")
-      expect(response.body).to include(sponsorship.blurb_html)
-    end
-
-    it "shows meta keywords" do
-      SiteConfig.meta_keywords = { tag: "software engineering, ruby" }
-      get "/t/#{tag.name}"
-      expect(response.body).to include("<meta name=\"keywords\" content=\"software engineering, ruby, #{tag.name}\">")
-    end
-
-    context "with user signed in" do
-      before do
-        sign_in user
-      end
-
-      it "shows tags to signed-in users" do
-        get "/t/#{tag.name}"
-        expect(response.body).to include("crayons-tabs__item crayons-tabs__item--current")
-      end
-
-      it "renders properly even if site config is private" do
-        SiteConfig.public = false
-        get "/t/#{tag.name}"
-        expect(response.body).to include("crayons-tabs__item crayons-tabs__item--current")
-      end
-
-      it "has mod-action-button" do
-        get "/t/#{tag.name}"
-        expect(response.body).to include('<a class="cta mod-action-button"')
-      end
-
-      it "does not render pagination" do
-        get "/t/#{tag.name}"
-        expect(response.body).not_to include('<span class="olderposts-pagenumber">')
-      end
-
-      it "does not render pagination even with many posts" do
-        create_list(:article, 20, user: user, featured: true, tags: [tag.name], score: 20)
-        get "/t/#{tag.name}"
-        expect(response.body).not_to include('<span class="olderposts-pagenumber">')
-      end
-
-      it "sets remember_user_token" do
-        get "/t/#{tag.name}"
-        expect(response.cookies["remember_user_token"]).not_to be nil
-      end
-    end
-
-    context "without user signed in" do
-      let(:tag) { create(:tag) }
-
-      it "shows sign-in notice to non-signed-in users" do
-        get "/t/#{tag.name}"
-        expect(response.body).not_to include("crayons-tabs__item crayons-tabs__item--current")
-        expect(response.body).to include("for the ability sort posts by")
-      end
-
-      it "does not render pagination" do
-        get "/t/#{tag.name}"
-        expect(response.body).not_to include('<span class="olderposts-pagenumber">')
-      end
-
-      it "does not render pagination even with many posts" do
-        create_list(:article, 20, user: user, featured: true, tags: [tag.name], score: 20)
-        get "/t/#{tag.name}"
-        expect(response.body).to include('<span class="olderposts-pagenumber">')
-      end
-
-      it "does not include sidebar for page tag" do
-        create_list(:article, 20, user: user, featured: true, tags: [tag.name], score: 20)
-        get "/t/#{tag.name}/page/2"
-        expect(response.body).not_to include('<div id="sidebar-wrapper-right"')
-      end
-
-      it "renders proper page title for page 1" do
-        create_list(:article, 20, user: user, featured: true, tags: [tag.name], score: 20)
-        get "/t/#{tag.name}/page/1"
-        expect(response.body).to include("<title>#{tag.name.capitalize} - ")
-      end
-
-      it "renders proper page title for page 2" do
-        create_list(:article, 20, user: user, featured: true, tags: [tag.name], score: 20)
-        get "/t/#{tag.name}/page/2"
-        expect(response.body).to include("<title>#{tag.name.capitalize} Page 2 - ")
-      end
-
-      it "does not include current page link" do
-        create_list(:article, 20, user: user, featured: true, tags: [tag.name], score: 20)
-        get "/t/#{tag.name}/page/2"
-        expect(response.body).to include('<span class="olderposts-pagenumber">2')
-        expect(response.body).not_to include("<a href=\"/t/#{tag.name}/page/2")
-        get "/t/#{tag.name}"
-        expect(response.body).to include('<span class="olderposts-pagenumber">1')
-        expect(response.body).not_to include("<a href=\"/t/#{tag.name}/page/1")
-        expect(response.body).not_to include("<a href=\"/t/#{tag.name}/page/3")
-      end
-
-      it "renders proper canonical url for page 1" do
-        get "/t/#{tag.name}"
-        expect(response.body).to include("<link rel=\"canonical\" href=\"http://localhost:3000/t/#{tag.name}\" />")
-      end
-
-      it "renders proper canonical url for page 2" do
-        get "/t/#{tag.name}/page/2"
-
-        expected_tag = "<link rel=\"canonical\" href=\"http://localhost:3000/t/#{tag.name}/page/2\" />"
-        expect(response.body).to include(expected_tag)
-      end
-
-      it "sets does not set remember_user_token" do
-        get "/t/#{tag.name}"
-        expect(response.cookies["remember_user_token"]).to be nil
-      end
-    end
-  end
-
-  describe "GET user_path" do
-    include_examples "redirects to the lowercase route" do
-      let(:path) { "/#{build(:user).username.upcase}" }
-    end
-  end
-
-  describe "GET organization_path" do
-    include_examples "redirects to the lowercase route" do
-      let(:path) { "/#{build(:organization).slug.upcase}" }
     end
   end
 end

@@ -1,3 +1,6 @@
+#  @note When we destroy the related user, it's using dependent:
+#        :delete for the relationship.  That means no before/after
+#        destroy callbacks will be called on this object.
 class Notification < ApplicationRecord
   belongs_to :notifiable, polymorphic: true
   belongs_to :user, optional: true
@@ -28,16 +31,33 @@ class Notification < ApplicationRecord
       return unless follow && Follow.need_new_follower_notification_for?(follow.followable_type)
       return if follow.followable_type == "User" && UserBlock.blocking?(follow.followable_id, follow.follower_id)
 
-      follow_data = follow.attributes.slice("follower_id", "followable_id", "followable_type").symbolize_keys
-      Notifications::NewFollowerWorker.perform_async(follow_data, is_read)
+      follow_data = Notifications::NewFollower::FollowData.coerce(follow).to_h
+      follower = User.find_by(id: follow.follower_id)
+      if follower.registered_at > 48.hours.ago # Delay the job 60 minutes to check for spam users if new user
+        Notifications::NewFollowerWorker.perform_in(1.hour, follow_data, is_read)
+      else
+        Notifications::NewFollowerWorker.perform_async(follow_data, is_read)
+      end
     end
 
     def send_new_follower_notification_without_delay(follow, is_read: false)
       return unless follow && Follow.need_new_follower_notification_for?(follow.followable_type)
       return if follow.followable_type == "User" && UserBlock.blocking?(follow.followable_id, follow.follower_id)
 
-      follow_data = follow.attributes.slice("follower_id", "followable_id", "followable_type").symbolize_keys
+      follow_data = Notifications::NewFollower::FollowData.coerce(follow).to_h
       Notifications::NewFollowerWorker.new.perform(follow_data, is_read)
+    end
+
+    def send_to_mentioned_users_and_followers(notifiable, _action = nil)
+      return unless notifiable.is_a?(Article) && notifiable.published?
+
+      # We need to create associated mentions inline because they need to exist _before_ creating any
+      # other Article-related notifications. This ensures that users will not receive a second notification for the
+      # post being published if they have already received an initial notification about being @-mentioned in the post.
+      Mentions::CreateAll.call(notifiable)
+
+      # Kicks off a worker to send any notifications about the post being published, if necessary.
+      Notification.send_to_followers(notifiable, "Published")
     end
 
     def send_to_followers(notifiable, action = nil)
@@ -70,9 +90,15 @@ class Notification < ApplicationRecord
     end
 
     def send_mention_notification(mention)
-      return if mention.mentionable_type == "User" && UserBlock.blocking?(mention.mentionable_id, mention.user_id)
+      return if MentionDecorator.new(mention).mentioned_by_blocked_user?
 
       Notifications::MentionWorker.perform_async(mention.id)
+    end
+
+    def send_mention_notification_without_delay(mention)
+      return if MentionDecorator.new(mention).mentioned_by_blocked_user?
+
+      Notifications::NewMention::Send.call(mention) if mention
     end
 
     def send_welcome_notification(receiver_id, broadcast_id)
@@ -80,11 +106,13 @@ class Notification < ApplicationRecord
     end
 
     def send_moderation_notification(notifiable)
-      # TODO: make this work for articles in the future. only works for comments right now
-      return unless notifiable.commentable
-      return if UserBlock.blocking?(notifiable.commentable.user_id, notifiable.user_id)
+      return unless [Comment, Article].include?(notifiable.class)
 
-      Notifications::ModerationNotificationWorker.perform_async(notifiable.id)
+      if notifiable.instance_of?(Comment) && UserBlock.blocking?(notifiable.commentable.user_id, notifiable.user_id)
+        return
+      end
+
+      Notifications::CreateRoundRobinModerationNotificationsWorker.perform_async(notifiable.id, notifiable.class.to_s)
     end
 
     def send_tag_adjustment_notification(tag_adjustment)
@@ -136,12 +164,8 @@ class Notification < ApplicationRecord
     private
 
     def reaction_notification_attributes(reaction, receiver)
-      reactable_data = {
-        reactable_id: reaction.reactable_id,
-        reactable_type: reaction.reactable_type,
-        reactable_user_id: reaction.reactable.user_id
-      }
-      receiver_data = { klass: receiver.class.name, id: receiver.id }
+      reactable_data = Notifications::Reactions::ReactionData.coerce(reaction).to_h
+      receiver_data = { "klass" => receiver.class.name, "id" => receiver.id }
       [reactable_data, receiver_data]
     end
   end

@@ -1,7 +1,7 @@
 require "rails_helper"
 
-RSpec.describe Github::OauthClient, type: :service, vcr: true do
-  let(:repo) { "thepracticaldev/dev.to" }
+RSpec.describe Github::OauthClient, :vcr, type: :service do
+  let(:repo) { "forem/forem" }
   let(:issue_id) { 7434 }
 
   describe "initialization" do
@@ -18,11 +18,11 @@ RSpec.describe Github::OauthClient, type: :service, vcr: true do
     end
 
     it "succeeds if access_token is present" do
-      expect { described_class.new(access_token: "value") }.not_to raise_error(ArgumentError)
+      expect { described_class.new(access_token: "value") }.not_to raise_error
     end
 
     it "succeeds if both client_id and client_secret are present" do
-      expect { described_class.new(client_id: "value", client_secret: "value") }.not_to raise_error(ArgumentError)
+      expect { described_class.new(client_id: "value", client_secret: "value") }.not_to raise_error
     end
   end
 

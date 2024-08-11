@@ -2,34 +2,27 @@
 # see https://help.github.com/en/github/creating-cloning-and-archiving-repositories/about-code-owners
 # for further details
 
-/*.md                                               @forem/oss
-/app/assets/stylesheets/admin/                      @forem/snackcase
-/app/controllers/articles_controller.rb             @forem/hells-bells
-/app/controllers/admin/                             @forem/snackcase
-/app/services/notifications/                        @forem/delightful
-/app/controllers/notifications/                     @forem/delightful
-/app/workers/notifications/                         @forem/delightful
-/app/controllers/admin/broadcasts_controller.rb     @forem/delightful
-/app/controllers/async_info_controller.rb           @forem/sre
-/app/controllers/stories_controller.rb              @forem/hells-bells
-/app/services/search/                               @forem/sre
-/app/views/articles/                                @forem/hells-bells
-/app/views/admin/                                   @forem/snackcase
-/app/views/moderation/                              @forem/snackcase
-/app/views/notifications/                           @forem/delightful
-/app/views/stories/                                 @forem/hells-bells
-/app/workers/                                       @forem/sre
-/config/                                            @forem/sre
-/db/                                                @forem/sre
-/docs/                                              @forem/oss    @jacobherrington
-/lib/data_update_scripts/                           @forem/sre
-/lib/sidekiq/                                       @forem/sre
-/spec/rails_helper.rb                               @forem/sre
-/spec/requests/admin/                               @forem/snackcase
-/spec/support/                                      @forem/sre
-/spec/system/admin/                                 @forem/snackcase
-Gemfile                                             @forem/sre    @forem/oss
-Gemfile.lock                                        @forem/sre    @forem/oss
-package.json                                        @forem/oss    @nickytonline
-yarn.lock                                           @forem/oss    @nickytonline
-.travis.yml                                         @forem/sre
+# Default global ownership
+* @forem/core-reviewers
+
+# Dependency ownership
+Gemfile      @forem/core-reviewers @forem/platform
+Gemfile.lock @forem/core-reviewers @forem/platform
+package.json @forem/core-reviewers @forem/platform
+yarn.lock    @forem/core-reviewers @forem/platform
+
+# Platform specific ownership
+.buildkite/                              @forem/platform @forem/core-reviewers
+Containerfile                            @forem/platform @forem/core-reviewers
+Dockerfile                               @forem/platform @forem/core-reviewers
+app/controllers/async_info_controller.rb @forem/platform @forem/core-reviewers
+app/services/search/                     @forem/platform @forem/core-reviewers
+app/workers/                             @forem/platform @forem/core-reviewers
+config/                                  @forem/platform @forem/core-reviewers
+db/                                      @forem/platform @forem/core-reviewers
+docker-compose.yml                       @forem/platform @forem/core-reviewers
+lib/                                     @forem/platform @forem/core-reviewers
+podman-compose.yml                       @forem/platform @forem/core-reviewers
+scripts/                                 @forem/platform @forem/core-reviewers
+spec/rails_helper.rb                     @forem/platform @forem/core-reviewers
+spec/support/                            @forem/platform @forem/core-reviewers

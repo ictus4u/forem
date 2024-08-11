@@ -28,21 +28,14 @@ class ImageUploadsController < ApplicationController
     rescue CarrierWave::ProcessingError # server error
       respond_to do |format|
         format.json do
-          render json: { error: "A server error has occurred!" }, status: :unprocessable_entity
+          render json: { error: I18n.t("image_uploads_controller.server_error") },
+                 status: :unprocessable_entity
         end
       end
       return
     end
 
-    cloudinary_link(uploaders)
-  end
-
-  def cloudinary_link(uploaders)
-    links = if params[:wrap_cloudinary]
-              [ApplicationController.helpers.cloud_cover_url(uploaders[0].url)]
-            else
-              uploaders.map(&:url)
-            end
+    links = uploaders.map(&:url)
     respond_to do |format|
       format.json { render json: { links: links }, status: :ok }
     end
@@ -57,8 +50,8 @@ class ImageUploadsController < ApplicationController
   def validate_image
     images = Array.wrap(params["image"])
     return if images.blank?
-    return IS_NOT_FILE_MESSAGE unless valid_image_files?(images)
-    return FILENAME_TOO_LONG_MESSAGE unless valid_filenames?(images)
+    return is_not_file_message unless valid_image_files?(images)
+    return filename_too_long_message unless valid_filenames?(images)
 
     nil
   end

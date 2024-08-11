@@ -1,5 +1,7 @@
 @import 'variables';
 @import 'mixins';
+@import 'config/import';
+
 .dashboard-container {
   .manage-header {
     background: $bold-blue;
@@ -77,65 +79,6 @@
       }
     }
 
-    & div.ellipsis-menu {
-      float: right;
-      position: relative;
-
-      & button.ellipsis-menu-btn {
-        display: block;
-        float: right;
-        margin-top: 0.3em;
-        margin-right: -0.6em;
-        border: 0px;
-        background: transparent;
-        img {
-          width: 20px;
-        }
-
-        &:hover {
-          background-color: #eee;
-        }
-      }
-
-      & ul.ellipsis-menu {
-        position: absolute;
-        right: 0;
-        display: block;
-        background-color: white;
-        padding-left: 0;
-        border-style: solid;
-        border-color: #ccc;
-        border-radius: 3px;
-        border-width: 1px;
-        margin-top: 1.75em;
-        margin-right: -0.6em;
-
-        &.hidden {
-          display: none;
-        }
-
-        & hr {
-          margin: 0;
-          color: #ccc;
-          background-color: #ccc;
-          height: 1px;
-          border: 0;
-        }
-
-        & li.ellipsis-menu-item {
-          list-style: none;
-
-          & form * {
-            background-color: transparent;
-          }
-
-          &:hover {
-            background-color: #eee;
-          }
-        }
-      }
-    }
-
     .dashboard-collection-org-details {
       .dashboard-top-pill {
         @include themeable(
@@ -157,13 +100,6 @@
       font-size: 0.85em;
       padding: 3px 0px 6px;
       color: var(--card-color-tertiary);
-    }
-
-    a {
-      color: var(--card-color);
-      &.block-link {
-        display: block;
-      }
     }
 
     h2 {
@@ -280,54 +216,6 @@
         margin: 0;
         padding: 0;
         display: inline;
-
-        input[type='submit'],
-        button {
-          height: 30.4px;
-          border: 2px solid transparent;
-        }
-      }
-    }
-
-    .pill {
-      background: $bold-blue;
-      padding: 4px 20px;
-      border-radius: 100px;
-      color: white;
-      margin-right: 5px;
-      font-size: 14px;
-      border: 2px solid transparent;
-      margin-top: 6px;
-      display: inline-block;
-
-      &.yellow {
-        background: $yellow;
-        color: $black;
-        border: 2px solid $black;
-      }
-
-      &.green {
-        background: $green;
-        color: $black;
-      }
-
-      &.red {
-        background: $red;
-      }
-
-      &.black {
-        background: $dark-gray;
-      }
-
-      &.mute {
-        background-color: $medium-gray;
-        color: $white;
-      }
-
-      &.unmute {
-        // inverted background color
-        background-color: $blue;
-        color: $white;
       }
     }
 
@@ -343,7 +231,6 @@
     form {
       padding: 10px 0px;
       font-size: 15px;
-      font-family: $helvetica-condensed;
       font-stretch: condensed;
 
       select {
@@ -371,71 +258,65 @@
   }
 }
 
-.charts-container {
-  max-width: 500px;
-  height: 250px;
+.analytics-container {
+  max-width: 1400px;
   margin: 0 auto;
 }
 
-.pro-container {
-  width: 1400px;
-  margin: 0 auto;
+.crayons-tabs--analytics {
+  width: min-content;
+  margin: var(--su-1) auto var(--su-4);
+  @media screen and (min-width: 800px) {
+    margin: var(--su-1) var(--su-4) var(--su-4);
+  }
 }
+
+$column-flex: 1;
 
 .summary-stats {
+  text-align: center;
   display: flex;
-  flex-wrap: wrap;
-  width: 100%;
   justify-content: space-between;
 
-  .card {
-    flex: 1 0 150px;
+  &__col {
+    flex: $column-flex;
+    min-height: 100px;
   }
 }
 
-.toggles {
-  text-align: center;
-}
-
-.toggles button {
-  @include themeable-important(color, theme-color, $black);
-  display: inline-block;
-  padding: 2px 8px;
-  margin: 8px;
-  font-size: 1.3em;
-  border-radius: 2px;
-  border: 1px solid transparent;
-  font-family: $helvetica-condensed;
-  font-stretch: condensed;
-  top: 18px;
-  font-weight: 600;
-  background-color: transparent;
-
-  &:focus {
-    outline: 0;
-  }
-
-  &.selected {
-    background: #cfd7ff;
-    color: #0a0a0a !important;
-    border: 1px solid #4e57ef;
-    box-shadow: 3px 4px 0px #4e57ef;
-  }
+.crayons-tabs--analytics {
+  justify-content: center;
 }
 
 .graphs {
-  .row {
-    display: flex;
-    flex-wrap: wrap;
+  display: flex;
+  justify-content: space-between;
+  &__col {
+    flex: $column-flex;
+  }
+  .charts-container {
+    padding: var(--su-4);
+    height: 320px;
+    canvas {
+      min-height: 280px;
+      max-height: 280px;
+    }
+  }
+}
 
-    .card {
-      flex: 1 0;
+@media screen and (max-width: $breakpoint-s) {
+  .summary-stats,
+  .graphs {
+    display: block;
+    &__col {
+      display: block;
+      width: 90%;
+      margin: 10px auto;
     }
   }
 
-  h2 {
-    margin: 5px;
-    text-align: center;
+  .crayons-tabs--analytics {
+    width: 100%;
   }
 }
 
@@ -486,6 +367,7 @@
 
 .featured-stat {
   font-size: 2em;
+  font-weight: bold;
 }
 
 .header-card {
@@ -527,5 +409,16 @@
     padding: 10px 0px;
     font-size: 0.9em;
     font-weight: bold;
+  }
+}
+
+// dashboard pages
+.dashboard__tag__container {
+  height: 195px;
+  justify-content: space-between;
+
+  .crayons-tag {
+    padding-top: 0;
+    padding-bottom: 0;
   }
 }

@@ -2,53 +2,99 @@ module Stories
   class FeedsController < ApplicationController
     respond_to :json
 
-    VARIANTS = {
-      "more_random_experiment" => :default_home_feed_with_more_randomness_experiment,
-      "mix_base_more_random_experiment" => :mix_default_and_more_random_experiment,
-      "more_tag_weight_experiment" => :more_tag_weight_experiment,
-      "more_tag_weight_more_random_experiment" => :more_tag_weight_more_random_experiment,
-      "more_comments_experiment" => :more_comments_experiment,
-      "more_experience_level_weight_experiment" => :more_experience_level_weight_experiment,
-      "more_tag_weight_randomized_at_end_experiment" => :more_tag_weight_randomized_at_end_experiment,
-      "more_experience_level_weight_randomized_at_end_experiment" =>
-        :more_experience_level_weight_randomized_at_end_experiment,
-      "more_comments_randomized_at_end_experiment" => :more_comments_randomized_at_end_experiment,
-      "more_comments_medium_weight_randomized_at_end_experiment" =>
-        :more_comments_medium_weight_randomized_at_end_experiment,
-      "more_comments_minimal_weight_randomized_at_end_experiment" =>
-        :more_comments_minimal_weight_randomized_at_end_experiment,
-      "mix_of_everything_experiment" => :mix_of_everything_experiment
-    }.freeze
-
     def show
+      @page = (params[:page] || 1).to_i
+      # This most recent test has concluded with a winner. Preserved as a comment awaiting next test
+      # @comments_variant = field_test(:comments_to_display_20240129, participant: @user)
+      @comments_variant = "more_inclusive_recent_good_comments"
+
       @stories = assign_feed_stories
+
+      add_pinned_article
     end
 
     private
 
+    def add_pinned_article
+      return if params[:timeframe].present?
+
+      pinned_article = PinnedArticle.get
+      return if pinned_article.nil? || @stories.detect { |story| story.id == pinned_article.id }
+
+      @stories.prepend(pinned_article.decorate)
+    end
+
     def assign_feed_stories
-      feed = Articles::Feed.new(user: current_user, page: @page, tag: params[:tag])
-      stories = if params[:timeframe].in?(Timeframer::FILTER_TIMEFRAMES)
-                  feed.top_articles_by_timeframe(timeframe: params[:timeframe])
-                elsif params[:timeframe] == Timeframer::LATEST_TIMEFRAME
-                  feed.latest_feed
+      stories = if params[:timeframe].in?(Timeframe::FILTER_TIMEFRAMES)
+                  timeframe_feed
+                elsif params[:timeframe] == Timeframe::LATEST_TIMEFRAME
+                  latest_feed
                 elsif user_signed_in?
-                  ab_test_user_signed_in_feed(feed)
+                  signed_in_base_feed
                 else
-                  feed.default_home_feed(user_signed_in: user_signed_in?)
+                  signed_out_base_feed
                 end
+
       ArticleDecorator.decorate_collection(stories)
     end
 
-    def ab_test_user_signed_in_feed(feed)
-      test_variant = field_test(:user_home_feed, participant: current_user)
-      Honeycomb.add_field("field_test_user_home_feed", test_variant) # Monitoring different variants
+    def signed_in_base_feed
+      feed = if Settings::UserExperience.feed_strategy == "basic"
+               Articles::Feeds::Basic.new(user: current_user, page: @page, tag: params[:tag])
+             else
+               Articles::Feeds.feed_for(
+                 user: current_user,
+                 controller: self,
+                 page: @page,
+                 tag: params[:tag],
+                 number_of_articles: 35,
+               )
+             end
+      Datadog::Tracing.trace("feed.query",
+                             span_type: "db",
+                             resource: "#{self.class}.#{__method__}",
+                             tags: { feed_class: feed.class.to_s.dasherize }) do
+        # Hey, why the to_a you say?  Because the
+        # LargeForemExperimental has already done this.  But the
+        # weighted strategy has not.  I also don't want to alter the
+        # weighted query implementation as it returns a lovely
+        # ActiveRecord::Relation.  So this is a compromise.
 
-      if VARIANTS[test_variant].nil? || test_variant == "base"
-        feed.default_home_feed(user_signed_in: true)
-      else
-        feed.public_send(VARIANTS[test_variant])
+        feed.more_comments_minimal_weight_randomized(comments_variant: @comments_variant)
       end
+    end
+
+    def signed_out_base_feed
+      feed = if Settings::UserExperience.feed_strategy == "basic"
+               Articles::Feeds::Basic.new(user: nil, page: @page, tag: params[:tag])
+             else
+               Articles::Feeds.feed_for(
+                 user: current_user,
+                 controller: self,
+                 page: @page,
+                 tag: params[:tag],
+                 number_of_articles: 25,
+               )
+             end
+      Datadog::Tracing.trace("feed.query",
+                             span_type: "db",
+                             resource: "#{self.class}.#{__method__}",
+                             tags: { feed_class: feed.class.to_s.dasherize }) do
+        # Hey, why the to_a you say?  Because the
+        # LargeForemExperimental has already done this.  But the
+        # weighted strategy has not.  I also don't want to alter the
+        # weighted query implementation as it returns a lovely
+        # ActiveRecord::Relation.  So this is a compromise.
+        feed.default_home_feed(user_signed_in: false).to_a
+      end
+    end
+
+    def timeframe_feed
+      Articles::Feeds::Timeframe.call(params[:timeframe], tag: params[:tag], page: @page)
+    end
+
+    def latest_feed
+      Articles::Feeds::Latest.call(tag: params[:tag], page: @page)
     end
   end
 end

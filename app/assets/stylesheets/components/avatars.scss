@@ -19,6 +19,9 @@
     background-color: $background;
     width: var(--su-6);
     height: var(--su-6);
+    overflow: hidden;
+    vertical-align: middle;
+    flex-shrink: 0;
 
     &__image {
       border-radius: $radius;
@@ -59,6 +62,78 @@
     &--3xl {
       width: var(--su-10);
       height: var(--su-10);
+    }
+  }
+
+  @media (min-width: $breakpoint-s) {
+    .s\:crayons-#{$name} {
+      &--l {
+        width: var(--su-7);
+        height: var(--su-7);
+      }
+
+      &--xl {
+        width: var(--su-8);
+        height: var(--su-8);
+      }
+
+      &--2xl {
+        width: var(--su-9);
+        height: var(--su-9);
+      }
+
+      &--3xl {
+        width: var(--su-10);
+        height: var(--su-10);
+      }
+    }
+  }
+
+  @media (min-width: $breakpoint-m) {
+    .m\:crayons-#{$name} {
+      &--l {
+        width: var(--su-7);
+        height: var(--su-7);
+      }
+
+      &--xl {
+        width: var(--su-8);
+        height: var(--su-8);
+      }
+
+      &--2xl {
+        width: var(--su-9);
+        height: var(--su-9);
+      }
+
+      &--3xl {
+        width: var(--su-10);
+        height: var(--su-10);
+      }
+    }
+  }
+
+  @media (min-width: $breakpoint-l) {
+    .l\:crayons-#{$name} {
+      &--l {
+        width: var(--su-7);
+        height: var(--su-7);
+      }
+
+      &--xl {
+        width: var(--su-8);
+        height: var(--su-8);
+      }
+
+      &--2xl {
+        width: var(--su-9);
+        height: var(--su-9);
+      }
+
+      &--3xl {
+        width: var(--su-10);
+        height: var(--su-10);
+      }
     }
   }
 }

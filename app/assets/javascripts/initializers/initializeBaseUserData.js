@@ -1,61 +1,55 @@
 /* global filterXSS */
-
-function initializeUserProfileContent(user) {
-  document.getElementById('sidebar-profile--avatar').src =
+function initializeProfileImage(user) {
+  if (!document.getElementById('comment-primary-user-profile--avatar')) return;
+  document.getElementById('comment-primary-user-profile--avatar').src =
     user.profile_image_90;
-  document.getElementById('sidebar-profile--avatar').alt = user.username;
-
-  document.getElementById('sidebar-profile--name').innerHTML = filterXSS(
-    user.name,
-  );
-  document.getElementById('sidebar-profile--username').innerHTML =
-    '@' + user.username;
-  document.getElementById('sidebar-profile').href = '/' + user.username;
-}
-
-function initializeUserSidebar(user) {
-  if (!document.getElementById('sidebar-nav')) return;
-  initializeUserProfileContent(user);
-
-  let followedTags = JSON.parse(user.followed_tags);
-  const tagSeparatorLabel =
-    followedTags.length === 0
-      ? 'FOLLOW TAGS TO IMPROVE YOUR FEED'
-      : 'OTHER POPULAR TAGS';
-
-  followedTags.forEach((tag) => {
-    const element = document.getElementById(
-      'default-sidebar-element-' + tag.name,
-    );
-
-    if (element) {
-      element.remove();
-    }
-  });
-
-  document.getElementById('tag-separator').innerHTML = tagSeparatorLabel;
-  document.getElementById('sidebar-nav-default-tags').classList.add('showing');
 }
 
 function addRelevantButtonsToArticle(user) {
   var articleContainer = document.getElementById('article-show-container');
-  if (articleContainer) {
+
+  if (
+    articleContainer &&
+    articleContainer.dataset.buttonsInitialized !== 'true'
+  ) {
+    let actions = [];
+
+    const published = JSON.parse(articleContainer.dataset.published);
+    const scheduled = JSON.parse(articleContainer.dataset.scheduled);
+
     if (parseInt(articleContainer.dataset.authorId, 10) === user.id) {
-      let actions = [
-        `<a class="crayons-btn crayons-btn--s crayons-btn--secondary" href="${articleContainer.dataset.path}/edit" rel="nofollow">Edit</a>`,
-      ];
-      if (JSON.parse(articleContainer.dataset.published) === true) {
+      actions.push(
+        `<a class="crayons-btn crayons-btn--s crayons-btn--ghost px-2" href="${articleContainer.dataset.path}/edit" rel="nofollow">Edit</a>`,
+      );
+
+      let clickToEditButton = document.getElementById('author-click-to-edit');
+      if (clickToEditButton) {
+        clickToEditButton.style.display = 'inline-block';
+      }
+
+      if (published === true && !scheduled) {
         actions.push(
-          `<a class="crayons-btn crayons-btn--s crayons-btn--secondary ml-1" href="${articleContainer.dataset.path}/manage" rel="nofollow">Manage</a>`,
+          `<a class="crayons-btn crayons-btn--s crayons-btn--ghost px-2" id ="article-action-space-manage" href="${articleContainer.dataset.path}/manage" rel="nofollow">Manage</a>`,
         );
       }
-      if (user.pro) {
-        actions.push(
-          `<a class="crayons-btn crayons-btn--s crayons-btn--secondary ml-1" href="${articleContainer.dataset.path}/stats" rel="nofollow">Stats</a>`,
-        );
-      }
-      document.getElementById('action-space').innerHTML = actions.join('');
+
+      actions.push(
+        `<a class="crayons-btn crayons-btn--s crayons-btn--ghost px-2" href="${articleContainer.dataset.path}/stats" rel="nofollow">Stats</a>`,
+      );
     }
+
+    const { articleId, pinnedArticleId } = articleContainer.dataset;
+
+    // we hide the buttons for draft articles, for non admins and
+    // if there's already a pinned post different from the current one
+    if (user.admin) {
+      actions.push(
+        `<a class="crayons-btn crayons-btn--s crayons-btn--ghost px-2" href="/admin/content_manager/articles/${articleId}" data-no-instant>Admin</a>`,
+      );
+    }
+
+    document.getElementById('action-space').innerHTML = actions.join('');
+    articleContainer.dataset.buttonsInitialized = 'true';
   }
 }
 
@@ -103,29 +97,25 @@ function addRelevantButtonsToComments(user) {
   }
 }
 
-function initializeBaseUserData() {
-  const user = userData();
-  const userProfileLinkHTML =
-    '<a href="/' +
-    user.username +
-    '" id="first-nav-link" class="crayons-link crayons-link--block"><div>' +
-    '<span class="fw-medium block">' +
-    user.name +
-    '</span>' +
-    '<small class="fs-s color-base-50">@' +
-    user.username +
-    '</small>' +
-    '</div></a>';
-  document.getElementById(
-    'user-profile-link-placeholder',
-  ).innerHTML = userProfileLinkHTML;
+function setCurrentUserToNavBar(user) {
   const userNavLink = document.getElementById('first-nav-link');
   userNavLink.href = `/${user.username}`;
-  userNavLink.querySelector('span').textContent = user.name;
-  userNavLink.querySelector('small').textContent = `@${user.username}`;
+  userNavLink.getElementsByTagName('span')[0].textContent = user.name;
+  userNavLink.getElementsByTagName(
+    'small',
+  )[0].textContent = `@${user.username}`;
   document.getElementById('nav-profile-image').src = user.profile_image_90;
+  if (user.admin) {
+    document
+      .getElementsByClassName('js-header-menu-admin-link')[0]
+      .classList.remove('hidden');
+  }
+}
 
-  initializeUserSidebar(user);
+function initializeBaseUserData() {
+  const user = userData();
+  setCurrentUserToNavBar(user);
+  initializeProfileImage(user);
   addRelevantButtonsToArticle(user);
   addRelevantButtonsToComments(user);
 }

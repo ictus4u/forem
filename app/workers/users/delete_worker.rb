@@ -1,6 +1,6 @@
 module Users
   class DeleteWorker
-    include Sidekiq::Worker
+    include Sidekiq::Job
 
     sidekiq_options queue: :high_priority, retry: 10
 
@@ -9,6 +9,9 @@ module Users
       return unless user
 
       Users::Delete.call(user)
+      # notify admins internally that they need to delete gdpr data
+      GDPRDeleteRequest.create(user_id: user.id, email: user.email, username: user.username)
+
       return if admin_delete || user.email.blank?
 
       # at this point the user object is already destroyed on the DB,
@@ -16,7 +19,7 @@ module Users
       # whole object
       NotifyMailer.with(name: user.name, email: user.email).account_deleted_email.deliver_now
     rescue StandardError => e
-      DatadogStatsClient.count("users.delete", 1, tags: ["action:failed", "user_id:#{user.id}"])
+      ForemStatsClient.count("users.delete", 1, tags: ["action:failed", "user_id:#{user.id}"])
       Honeybadger.context({ user_id: user.id })
       Honeybadger.notify(e)
     end

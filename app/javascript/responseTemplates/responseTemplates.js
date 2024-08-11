@@ -1,18 +1,15 @@
-/* eslint-disable no-alert */
-/* eslint-disable no-restricted-globals */
-
 function toggleTemplateTypeButton(form, e) {
   const { targetType } = e.target.dataset;
   const activeType = targetType === 'personal' ? 'moderator' : 'personal';
   e.target.classList.toggle('active');
   form
-    .querySelector(`.${activeType}-template-button`)
+    .getElementsByClassName(`${activeType}-template-button`)[0]
     .classList.toggle('active');
   form
-    .querySelector(`.${targetType}-responses-container`)
+    .getElementsByClassName(`${targetType}-responses-container`)[0]
     .classList.toggle('hidden');
   form
-    .querySelector(`.${activeType}-responses-container`)
+    .getElementsByClassName(`${activeType}-responses-container`)[0]
     .classList.toggle('hidden');
 }
 
@@ -29,11 +26,16 @@ function buildHTML(response, typeOf) {
   if (typeOf === 'personal_comment') {
     return response
       .map((obj) => {
+        const content = obj.content.replaceAll('"', '&quot;');
         return `
-          <div class="mod-response-wrapper">
-            <span>${obj.title}</span>
-            <p>${obj.content}</p>
-            <button class="insert-template-button" type="button" data-content="${obj.content}">INSERT</button>
+          <div class="mod-response-wrapper flex mb-4">
+            <div class="flex-1">
+              <h4>${obj.title}</h4>
+              <p>${obj.content}</p>
+            </div>
+            <div class="pl-2">
+              <button class="crayons-btn crayons-btn--secondary crayons-btn--s insert-template-button" type="button" data-content="${content}">Insert</button>
+            </div>
           </div>
         `;
       })
@@ -42,12 +44,17 @@ function buildHTML(response, typeOf) {
   if (typeOf === 'mod_comment') {
     return response
       .map((obj) => {
+        const content = obj.content.replaceAll('"', '&quot;');
         return `
-            <div class="mod-response-wrapper">
-              <span>${obj.title}</span>
-              <p>${obj.content}</p>
-              <button class="insert-template-button" type="button" data-content="${obj.content}">INSERT</button>
-              <button class="moderator-submit-button" type="submit" data-response-template-id="${obj.id}">SEND AS MOD</button>
+            <div class="mod-response-wrapper mb-4 flex">
+              <div class="flex-1">
+                <h4>${obj.title}</h4>
+                <p>${obj.content}</p>
+              </div>
+              <div class="flex flex-nowrap pl-2">
+                <button class="crayons-btn crayons-btn--s crayons-btn--secondary moderator-submit-button m-1" type="submit" data-response-template-id="${obj.id}">Send as Mod</button>
+                <button class="crayons-btn crayons-btn--s crayons-btn--outlined insert-template-button m-1" type="button" data-content="${content}">Insert</button>
+              </div>
             </div>
           `;
       })
@@ -57,8 +64,7 @@ function buildHTML(response, typeOf) {
 }
 
 function submitAsModerator(responseTemplateId, parentId) {
-  const commentableId = document.querySelector('input#comment_commentable_id')
-    .value;
+  const commentableId = document.getElementById('comment_commentable_id').value;
 
   fetch(`/comments/moderator_create`, {
     method: 'POST',
@@ -94,7 +100,7 @@ function submitAsModerator(responseTemplateId, parentId) {
 }
 
 const confirmMsg = `
-Are you sure you want to submit this comment as Sloan?
+Are you sure you want to submit this comment?
 
 It will be sent immediately and users will be notified.
 
@@ -102,14 +108,12 @@ Make sure this is the appropriate comment for the situation.
 
 This action is not reversible.`;
 
-function addClickListeners(form) {
-  const responsesContainer = form.querySelector(
-    '.response-templates-container',
-  );
+function addClickListeners(form, onTemplateSelected) {
+  const responsesContainer = form.getElementsByClassName(
+    'response-templates-container',
+  )[0];
   const parentCommentId =
-    form.id !== 'new_comment'
-      ? form.querySelector('input#comment_parent_id').value
-      : null;
+    form.id !== 'new_comment' && !form.id.includes('edit_comment');
   const insertButtons = Array.from(
     responsesContainer.getElementsByClassName('insert-template-button'),
   );
@@ -118,9 +122,10 @@ function addClickListeners(form) {
   );
 
   insertButtons.forEach((button) => {
-    button.addEventListener('click', (e) => {
-      const { content } = e.target.dataset;
-      const textArea = form.querySelector('textarea');
+    button.addEventListener('click', (event) => {
+      const { content } = event.target.dataset;
+
+      const textArea = event.target.form.querySelector('.comment-textarea');
       const textAreaReplaceable =
         textArea.value === null ||
         textArea.value === '' ||
@@ -128,7 +133,9 @@ function addClickListeners(form) {
 
       if (textAreaReplaceable) {
         textArea.value = content;
-        responsesContainer.classList.toggle('hidden');
+        textArea.dispatchEvent(new Event('input', { target: textArea }));
+        textArea.focus();
+        onTemplateSelected();
       }
     });
   });
@@ -144,16 +151,15 @@ function addClickListeners(form) {
   });
 }
 
-function fetchResponseTemplates(typeOf, formId) {
+function fetchResponseTemplates(formId, onTemplateSelected) {
   const form = document.getElementById(formId);
-  let dataContainer;
-  if (typeOf === 'personal_comment') {
-    dataContainer = form.querySelector('.personal-responses-container');
-  } else if (typeOf === 'mod_comment') {
-    dataContainer = form.querySelector('.moderator-responses-container');
-  }
-  /* eslint-disable-next-line no-undef */
-  fetch(`/response_templates?type_of=${typeOf}`, {
+
+  const typesOf = [
+    ['personal_comment', 'personal-responses-container'],
+    ['mod_comment', 'moderator-responses-container'],
+  ];
+
+  fetch(`/response_templates`, {
     method: 'GET',
     headers: {
       Accept: 'application/json',
@@ -163,44 +169,52 @@ function fetchResponseTemplates(typeOf, formId) {
   })
     .then((response) => response.json())
     .then((response) => {
-      form.querySelector('img.loading-img').classList.toggle('hidden');
-      dataContainer.innerHTML = buildHTML(response, typeOf);
+
+      let revealed;
       const topLevelData = document.getElementById('response-templates-data');
-      topLevelData.innerHTML = dataContainer.parentElement.innerHTML;
-      addClickListeners(form);
+
+      for (const typesOfContainers of typesOf) {
+        const [typeOf, containedIn] = typesOfContainers;
+
+        if (typeof response[typeOf] != 'undefined') {
+          const dataContainer = form.getElementsByClassName(containedIn)[0];
+          dataContainer.innerHTML = buildHTML(response[typeOf], typeOf);
+
+          if (revealed) {
+            topLevelData.classList.add(typeOf);
+            dataContainer.classList.add('hidden');
+            prepareHeaderButtons(form);
+          } else {
+            revealed = dataContainer;
+            dataContainer.classList.remove('hidden');
+            topLevelData.classList.add(typeOf);
+          }
+
+          topLevelData.innerHTML = dataContainer.parentElement.innerHTML;
+        }
+      }
+
+      addClickListeners(form, onTemplateSelected);
     });
 }
 
 function prepareHeaderButtons(form) {
-  const personalTemplateButton = form.querySelector(
-    '.personal-template-button',
-  );
-  const modTemplateButton = form.querySelector('.moderator-template-button');
+  const personalTemplateButton = form.getElementsByClassName(
+    'personal-template-button',
+  )[0];
+  const modTemplateButton = form.getElementsByClassName(
+    'moderator-template-button',
+  )[0];
 
   personalTemplateButton.addEventListener('click', (e) => {
     toggleTemplateTypeButton(form, e);
   });
+  personalTemplateButton.classList.remove('hidden');
+
   modTemplateButton.addEventListener('click', (e) => {
     toggleTemplateTypeButton(form, e);
   });
   modTemplateButton.classList.remove('hidden');
-
-  modTemplateButton.addEventListener(
-    'click',
-    () => {
-      const topLevelData = document.getElementById('response-templates-data');
-      const modDataNotFetched =
-        topLevelData.innerHTML !== ''
-          ? topLevelData.querySelector('.moderator-responses-container')
-              .childElementCount === 0
-          : false;
-      if (modDataNotFetched) {
-        form.querySelector('img.loading-img').classList.toggle('hidden');
-        fetchResponseTemplates('mod_comment', form.id);
-      }
-    },
-    { once: true },
-  );
 }
 
 function copyData(responsesContainer) {
@@ -209,95 +223,49 @@ function copyData(responsesContainer) {
   ).innerHTML;
 }
 
-function loadData(form) {
-  form.querySelector('img.loading-img').classList.toggle('hidden');
-  fetchResponseTemplates('personal_comment', form.id);
+function loadData(form, onTemplateSelected) {
+  fetchResponseTemplates(form.id, onTemplateSelected);
 }
 
-function openButtonCallback(form) {
-  const responsesContainer = form.querySelector(
-    '.response-templates-container',
-  );
-  const dataFetched =
-    document.getElementById('response-templates-data').innerHTML !== '';
+/**
+ * This helper function makes sure the correct templates are inserted into the UI next to the given comment form.
+ *
+ * @param {HTMLElement} form The relevant comment form
+ * @param {Function} onTemplateSelected Callback for when a template is inserted
+ */
+export function populateTemplates(form, onTemplateSelected) {
+  const responsesContainer = form.getElementsByClassName(
+    'response-templates-container',
+  )[0];
+  const topLevelData = document.getElementById('response-templates-data');
+  const dataFetched = topLevelData.innerHTML !== '';
 
-  responsesContainer.classList.toggle('hidden');
-
-  const containerHidden = responsesContainer.classList.contains('hidden');
-
-  if (dataFetched && !containerHidden) {
+  if (dataFetched) {
     copyData(responsesContainer);
-    addClickListeners(form);
-  } else if (!dataFetched && !containerHidden) {
-    loadData(form)
+    addClickListeners(form, onTemplateSelected);
+  } else if (!dataFetched) {
+    loadData(form, onTemplateSelected);
   }
-  /* eslint-disable-next-line no-undef */
-  if (userData().moderator_for_tags.length > 0) {
+
+  const hasBothTemplates =
+    topLevelData.classList.contains('personal_comment') &&
+    topLevelData.classList.contains('mod_comment');
+
+  if (hasBothTemplates) {
+    form
+      .getElementsByClassName('moderator-template-button')[0]
+      .classList.remove('hidden');
+    form
+      .getElementsByClassName('personal-template-button')[0]
+      .classList.remove('hidden');
+
     prepareHeaderButtons(form);
   } else {
-    form.querySelector('.personal-template-button').classList.add('hidden');
-  }
-}
-
-function prepareOpenButton(form) {
-  const button = form.querySelector('.response-templates-button');
-  if (!button) {
-    return;
-  }
-
-  button.addEventListener('click', () => {
-    openButtonCallback(form);
-  });
-
-  button.dataset.hasListener = "true";
-}
-
-function observeForReplyClick() {
-  const config = { childList: true, subtree: true };
-
-  const callback = (mutations) => {
-    const form = mutations[0].addedNodes[0];
-    if (form.nodeName === 'FORM') {
-      prepareOpenButton(form);
-    }
-  };
-
-  const observer = new MutationObserver(callback);
-
-  const commentTree = document.getElementById('comment-trees-container');
-  observer.observe(commentTree, config);
-
-  window.addEventListener('beforeunload', () => {
-    observer.disconnect();
-  });
-
-  window.InstantClick.on('change', () => {
-    observer.disconnect();
-  });
-}
-
-function handleLoggedOut() {
-  // global method from app/assets/javascripts/utilities/showModal.js
-  /* eslint-disable-next-line no-undef */
-  document.querySelector('.response-templates-button')?.addEventListener('click', showModal);
-}
-/* eslint-enable no-alert */
-/* eslint-enable no-restricted-globals */
-
-export function loadResponseTemplates() {
-  const { userStatus } = document.body.dataset;
-  const form = document.getElementById('new_comment');
-
-  if (document.getElementById('response-templates-data')) {
-    if (userStatus === 'logged-out') {
-      handleLoggedOut();
-    }
-    if (
-      form &&
-      form.querySelector('.response-templates-button').dataset.hasListener === 'false'
-    ) {
-      prepareOpenButton(form);
-    }
-    observeForReplyClick();
+    form
+      .getElementsByClassName('moderator-template-button')[0]
+      .classList.add('hidden');
+    form
+      .getElementsByClassName('personal-template-button')[0]
+      .classList.add('hidden');
   }
 }

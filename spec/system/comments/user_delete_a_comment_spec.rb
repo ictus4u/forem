@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "Deleting Comment", type: :system, js: true, elasticsearch: "FeedContent" do
+RSpec.describe "Deleting Comment", js: true do
   let(:user) { create(:user) }
   let(:raw_comment) { Faker::Lorem.paragraph }
   let(:article) do
@@ -12,13 +12,13 @@ RSpec.describe "Deleting Comment", type: :system, js: true, elasticsearch: "Feed
     sign_in user
   end
 
-  it "works" do
+  it "returns to article page" do
     visit "/"
     visit "#{comment.path}/delete_confirm"
 
     wait_for_javascript
 
-    click_button("DELETE")
+    click_button("Delete")
     expect(page).to have_current_path(article.path)
   end
 end

@@ -4,8 +4,8 @@ class VideoStatesController < ApplicationController
   # This is purely for responding to AWS video state changes.
 
   def create
-    unless valid_user
-      render json: { message: "invalid_user" }, status: :unprocessable_entity
+    unless valid_key
+      render json: { message: "invalid_key" }, status: :unprocessable_entity
       return
     end
     begin
@@ -21,15 +21,15 @@ class VideoStatesController < ApplicationController
 
       NotifyMailer.with(article: @article).video_upload_complete_email.deliver_now
 
-      render json: { message: "Video state updated" }
+      render json: { message: I18n.t("video_states_controller.video_state_updated") }
     else
-      render json: { message: "Related article not found" }, status: :not_found
+      render json: { message: I18n.t("video_states_controller.related_article_not_found") }, status: :not_found
     end
   end
 
-  def valid_user
-    user = User.find_by(secret: params[:key])
-    user = nil unless user.has_role?(:super_admin)
-    user
+  private
+
+  def valid_key
+    params[:key] == Settings::General.video_encoder_key
   end
 end

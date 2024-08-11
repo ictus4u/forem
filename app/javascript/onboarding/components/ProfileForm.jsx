@@ -1,95 +1,207 @@
 import { h, Component } from 'preact';
 import PropTypes from 'prop-types';
 
-import { userData, getContentOfToken, updateOnboarding } from '../utilities';
-import Navigation from './Navigation';
+import { userData, updateOnboarding } from '../utilities';
+
+import { ProfileImage } from './ProfileForm/ProfileImage';
+import { Navigation } from './Navigation';
+import { TextArea } from './ProfileForm/TextArea';
+import { TextInput } from './ProfileForm/TextInput';
+import { CheckBox } from './ProfileForm/CheckBox';
+
+import { request } from '@utilities/http';
 
 /* eslint-disable camelcase */
-class ProfileForm extends Component {
+export class ProfileForm extends Component {
   constructor(props) {
     super(props);
 
-    this.handleChange = this.handleChange.bind(this);
+    this.handleFieldChange = this.handleFieldChange.bind(this);
+    this.handleColorPickerChange = this.handleColorPickerChange.bind(this);
     this.onSubmit = this.onSubmit.bind(this);
     this.user = userData();
-
     this.state = {
+      groups: [],
       formValues: {
-        summary: '',
-        location: '',
-        employment_title: '',
-        employer_name: '',
+        username: this.user.username,
+        profile_image_90: this.user.profile_image_90,
       },
+      canSkip: false,
       last_onboarding_page: 'v2: personal info form',
-      canSkip: true,
+      profile_image_90: this.user.profile_image_90,
     };
   }
 
   componentDidMount() {
+    this.getProfileFieldGroups();
     updateOnboarding('v2: personal info form');
   }
 
-  onSubmit() {
-    const csrfToken = getContentOfToken('csrf-token');
-    const { formValues, last_onboarding_page } = this.state;
-    fetch('/onboarding_update', {
-      method: 'PATCH',
-      headers: {
-        'X-CSRF-Token': csrfToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ user: { ...formValues, last_onboarding_page } }),
-      credentials: 'same-origin',
-    }).then((response) => {
+  async getProfileFieldGroups() {
+    try {
+      const response = await request(`/profile_field_groups?onboarding=true`);
       if (response.ok) {
-        const { next } = this.props;
-        next();
+        const data = await response.json();
+        this.setState({ groups: data.profile_field_groups });
+      } else {
+        throw new Error(response.statusText);
       }
-    });
+    } catch (error) {
+      this.setState({ error: true, errorMessage: error.toString() });
+    }
   }
 
-  handleChange(e) {
+  async onSubmit() {
+    const { formValues, last_onboarding_page } = this.state;
+    const { username, profile_image_90, ...newFormValues } = formValues;
+    try {
+      const response = await request('/onboarding', {
+        method: 'PATCH',
+        body: {
+          user: { last_onboarding_page, profile_image_90, username },
+          profile: { ...newFormValues },
+        },
+      });
+      if (!response.ok) {
+        throw response;
+      }
+      const { next } = this.props;
+      next();
+    } catch (error) {
+      Honeybadger.notify(error);
+      let errorMessage = 'Unable to continue, please try again.';
+      if (error.status === 422) {
+        // parse validation error messages from UsersController#onboarding
+        const errorData = await error.json();
+        errorMessage = errorData.errors;
+        this.setState({ error: true, errorMessage });
+      } else {
+        this.setState({ error: true, errorMessage });
+      }
+    }
+  }
+
+  handleFieldChange(e) {
     const { formValues } = { ...this.state };
     const currentFormState = formValues;
     const { name, value } = e.target;
 
     currentFormState[name] = value;
-
-    // Once we've derived the new form values, check if the form is empty
-    // and use that value to set the `canSkip` property on the state.
-    const formIsEmpty =
-      Object.values(currentFormState).filter((v) => v.length > 0).length === 0;
-
-    this.setState({ formValues: currentFormState, canSkip: formIsEmpty });
+    this.setState({
+      formValues: currentFormState,
+      canSkip: this.formIsEmpty(currentFormState),
+    });
   }
 
+  handleColorPickerChange(e) {
+    const { formValues } = { ...this.state };
+    const currentFormState = formValues;
+
+    const field = e.target;
+    const { name, value } = field;
+
+    const sibling = field.nextElementSibling
+      ? field.nextElementSibling
+      : field.previousElementSibling;
+    sibling.value = value;
+
+    currentFormState[name] = value;
+    this.setState({
+      formValues: currentFormState,
+      canSkip: this.formIsEmpty(currentFormState),
+    });
+  }
+
+  formIsEmpty(currentFormState) {
+    // Once we've derived the new form values, check if the form is empty
+    // and use that value to set the `canSkip` property on the state.
+    Object.values(currentFormState).filter((v) => v.length > 0).length === 0;
+  }
+
+  renderAppropriateFieldType(field) {
+    switch (field.input_type) {
+      case 'check_box':
+        return (
+          <CheckBox
+            key={field.id}
+            field={field}
+            onFieldChange={this.handleFieldChange}
+          />
+        );
+      case 'text_area':
+        return (
+          <TextArea
+            key={field.id}
+            field={field}
+            onFieldChange={this.handleFieldChange}
+          />
+        );
+      default:
+        return (
+          <TextInput
+            key={field.id}
+            field={field}
+            onFieldChange={this.handleFieldChange}
+          />
+        );
+    }
+  }
+
+  onProfileImageUrlChange = (url) => {
+    this.setState({ profile_image_90: url }, () => {
+      this.handleFieldChange({
+        target: { name: 'profile_image_90', value: url },
+      });
+    });
+  };
+
   render() {
-    const {
-      prev,
-      slidesCount,
-      currentSlideIndex,
-      communityConfig,
-    } = this.props;
-    const { profile_image_90, username, name } = this.user;
-    const { canSkip } = this.state;
+    const { prev, slidesCount, currentSlideIndex, communityConfig } =
+      this.props;
+    const { username, name } = this.user;
+    const { canSkip, groups = [], error, errorMessage } = this.state;
+    const SUMMARY_MAXLENGTH = 200;
+    const summaryCharacters = this.state?.formValues?.summary?.length || 0;
+
+    const sections = groups.map((group) => {
+      return (
+        <div key={group.id} class="onboarding-profile-sub-section">
+          <h2>{group.name}</h2>
+          {group.description && (
+            <div class="color-base-60">{group.description})</div>
+          )}
+          <div>
+            {group.profile_fields.map((field) => {
+              return this.renderAppropriateFieldType(field);
+            })}
+          </div>
+        </div>
+      );
+    });
 
     return (
       <div
         data-testid="onboarding-profile-form"
-        className="onboarding-main crayons-modal"
+        className="onboarding-main crayons-modal crayons-modal--large"
       >
-        <div className="crayons-modal__box">
-          <Navigation
-            prev={prev}
-            next={this.onSubmit}
-            canSkip={canSkip}
-            slidesCount={slidesCount}
-            currentSlideIndex={currentSlideIndex}
-          />
+        <div
+          className="crayons-modal__box"
+          role="dialog"
+          aria-labelledby="title"
+          aria-describedby="subtitle"
+        >
+          {error && (
+            <div role="alert" class="crayons-notice crayons-notice--danger m-2">
+              An error occurred: {errorMessage}
+            </div>
+          )}
           <div className="onboarding-content about">
             <header className="onboarding-content-header">
-              <h1 className="title">Build your profile</h1>
+              <h1 id="title" className="title">
+                Build your profile
+              </h1>
               <h2
+                id="subtitle"
                 data-testid="onboarding-profile-subtitle"
                 className="subtitle"
               >
@@ -98,64 +210,65 @@ class ProfileForm extends Component {
                 able to edit this later in your Settings.
               </h2>
             </header>
-            <div className="current-user-info">
-              <figure className="current-user-avatar-container">
-                <img
-                  className="current-user-avatar"
-                  alt="profile"
-                  src={profile_image_90}
-                />
-              </figure>
-              <h3>{name}</h3>
-              <p>{username}</p>
+            <div className="onboarding-profile-sub-section mt-8">
+              <ProfileImage
+                onMainImageUrlChange={this.onProfileImageUrlChange}
+                mainImage={this.state.profile_image_90}
+                userId={this.user.id}
+                name={name}
+              />
             </div>
-            <form>
-              <label htmlFor="summary">
-                Bio
-                <textarea
-                  name="summary"
-                  id="summary"
-                  placeholder="Tell us about yourself"
-                  onChange={this.handleChange}
-                  maxLength="120"
-                />
-              </label>
-              <label htmlFor="location">
-                Where are you located?
-                <input
-                  type="text"
-                  name="location"
-                  id="location"
-                  placeholder="e.g. New York, NY"
-                  onChange={this.handleChange}
-                  maxLength="60"
-                />
-              </label>
-              <label htmlFor="employment_title">
-                What is your title?
-                <input
-                  type="text"
-                  name="employment_title"
-                  id="employment_title"
-                  placeholder="e.g. Software Engineer"
-                  onChange={this.handleChange}
-                  maxLength="60"
-                />
-              </label>
-              <label htmlFor="employer_name">
-                Where do you work?
-                <input
-                  type="text"
-                  name="employer_name"
-                  id="employer_name"
-                  placeholder="e.g. Company name, self-employed, etc."
-                  onChange={this.handleChange}
-                  maxLength="60"
-                  className="onboarding-form-input--last"
-                />
-              </label>
-            </form>
+            <div className="onboarding-profile-sub-section">
+              <TextInput
+                field={{
+                  attribute_name: 'username',
+                  label: 'Username',
+                  default_value: username,
+                  required: true,
+                  maxLength: 20,
+                  placeholder_text: 'johndoe',
+                  description: '',
+                  input_type: 'text',
+                }}
+                onFieldChange={this.handleFieldChange}
+              />
+            </div>
+            <div className="onboarding-profile-sub-section">
+              <TextArea
+                field={{
+                  attribute_name: 'summary',
+                  label: 'Bio',
+                  placeholder_text: 'Tell us a little about yourself',
+                  required: false,
+                  maxLength: SUMMARY_MAXLENGTH,
+                  description: '',
+                  input_type: 'text_area',
+                }}
+                onFieldChange={this.handleFieldChange}
+              />
+              <p
+                id="summary-description"
+                class="crayons-field__description align-right"
+              >
+                <span class="screen-reader-only" aria-live="polite">
+                  Remaining characters: {SUMMARY_MAXLENGTH - summaryCharacters}
+                </span>
+                <span id="summary-characters">
+                  {summaryCharacters}/{SUMMARY_MAXLENGTH}
+                </span>
+              </p>
+            </div>
+
+            {sections}
           </div>
+          <Navigation
+            prev={prev}
+            next={this.onSubmit}
+            canSkip={canSkip}
+            slidesCount={slidesCount}
+            currentSlideIndex={currentSlideIndex}
+            hidePrev
+          />
         </div>
       </div>
     );
@@ -166,13 +279,10 @@ ProfileForm.propTypes = {
   prev: PropTypes.func.isRequired,
   next: PropTypes.func.isRequired,
   slidesCount: PropTypes.number.isRequired,
-  currentSlideIndex: PropTypes.func.isRequired,
+  currentSlideIndex: PropTypes.number.isRequired,
   communityConfig: PropTypes.shape({
     communityName: PropTypes.string.isRequired,
-    communityDescription: PropTypes.string.isRequired,
   }),
 };
-
-export default ProfileForm;
 
 /* eslint-enable camelcase */

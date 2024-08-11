@@ -7,7 +7,7 @@ RSpec.describe CommentTag, type: :liquid_tag do
     create(:comment, commentable: article, user: user, body_markdown: "TheComment")
   end
 
-  setup { Liquid::Template.register_tag("comment", described_class) }
+  before { Liquid::Template.register_tag("comment", described_class) }
 
   def generate_comment_tag(id_code)
     Liquid::Template.parse("{% comment #{id_code} %}")
@@ -18,14 +18,13 @@ RSpec.describe CommentTag, type: :liquid_tag do
       liquid = generate_comment_tag(comment.id_code_generated)
 
       expect(liquid.render).to include(comment.body_markdown)
-      expect(liquid.render).to include(user.name)
+        .and include(user.name)
     end
 
-    it "raise error if comment ID does not exist" do
-      expect do
-        liquid = generate_comment_tag("this will fail")
-        liquid.render
-      end.to raise_error(StandardError)
+    it "renders 'Comment Not Found' message if comment ID does not exist" do
+      liquid = generate_comment_tag("nonexistentid")
+
+      expect(liquid.render).to include("Comment Not Found")
     end
   end
 
@@ -51,6 +50,14 @@ RSpec.describe CommentTag, type: :liquid_tag do
 
       expect(liquid.render).to include(comment.body_markdown)
       expect(liquid.render).to include(user.name)
+    end
+  end
+
+  context "when given invalid id_code" do
+    it "raises an error" do
+      expect do
+        generate_comment_tag("Invalid%ID").render
+      end.to raise_error(StandardError, "Invalid Comment ID or URL")
     end
   end
 end

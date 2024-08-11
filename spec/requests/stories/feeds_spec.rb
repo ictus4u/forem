@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "Stories::Feeds", type: :request do
+RSpec.describe "Stories::Feeds" do
   let(:title) { "My post" }
   let(:user) { create(:user, name: "Josh") }
   let(:organization) { create(:organization, name: "JoshCo") }
@@ -12,11 +12,11 @@ RSpec.describe "Stories::Feeds", type: :request do
   end
 
   describe "GET feeds show" do
-    let(:response_json) { JSON.parse(response.body) }
+    let(:response_json) { response.parsed_body }
     let(:response_article) { response_json.first }
 
     it "renders article list as json" do
-      get "/stories/feed", headers: headers
+      get stories_feed_path
 
       expect(response.media_type).to eq("application/json")
       expect(response_article).to include(
@@ -30,6 +30,58 @@ RSpec.describe "Stories::Feeds", type: :request do
       )
     end
 
+    context "when there are no params passed (base feed) and user is NOT signed in" do
+      it "returns feed when feed_strategy is basic" do
+        allow(Settings::UserExperience).to receive(:feed_strategy).and_return("basic")
+
+        get stories_feed_path
+
+        expect(response_article).to include(
+          "id" => article.id,
+          "title" => title,
+          "user_id" => user.id,
+          "user" => hash_including("name" => user.name),
+          "organization_id" => organization.id,
+          "organization" => hash_including("name" => organization.name),
+          "tag_list" => article.decorate.cached_tag_list_array,
+        )
+      end
+
+      it "returns feed when feed_strategy is large_forem_experimental" do
+        allow(Settings::UserExperience).to receive(:feed_strategy).and_return("large_forem_experimental")
+
+        get stories_feed_path
+
+        expect(response_article).to include(
+          "id" => article.id,
+          "title" => title,
+          "user_id" => user.id,
+          "user" => hash_including("name" => user.name),
+          "organization_id" => organization.id,
+          "organization" => hash_including("name" => organization.name),
+          "tag_list" => article.decorate.cached_tag_list_array,
+        )
+      end
+    end
+
+    context "when rendering an article that is pinned" do
+      it "returns pinned set to true in the response" do
+        PinnedArticle.set(article)
+
+        get stories_feed_path
+
+        pinned_item = response.parsed_body.detect { |item| item["pinned"] == true }
+        expect(pinned_item["id"]).to eq(article.id)
+      end
+
+      it "returns pinned set to false in the response for non pinned articles" do
+        get stories_feed_path
+
+        pinned_item = response.parsed_body.detect { |item| item["pinned"] == true }
+        expect(pinned_item).to be_nil
+      end
+    end
+
     context "when rendering an article with an image" do
       let(:cloud_cover) { CloudCoverUrl.new(article.main_image) }
 
@@ -37,7 +89,7 @@ RSpec.describe "Stories::Feeds", type: :request do
         allow(CloudCoverUrl).to receive(:new).with(article.main_image).and_return(cloud_cover)
         allow(cloud_cover).to receive(:call).and_call_original
 
-        get "/stories/feed", headers: headers
+        get stories_feed_path
 
         expect(CloudCoverUrl).to have_received(:new).with(article.main_image)
         expect(cloud_cover).to have_received(:call)
@@ -50,8 +102,8 @@ RSpec.describe "Stories::Feeds", type: :request do
       it "renders main_image as null" do
         # Calling the standard feed endpoint only retrieves articles without images if you're logged in.
         # We'll call use the 'latest' param to get around this
-        get "/stories/feed?timeframe=latest", headers: headers
-        expect(response_article["main_image"]).to eq nil
+        get timeframe_stories_feed_path(:latest)
+        expect(response_article["main_image"]).to be_nil
       end
     end
 
@@ -59,10 +111,10 @@ RSpec.describe "Stories::Feeds", type: :request do
       let(:organization) { nil }
 
       it "omits organization keys from json" do
-        get "/stories/feed", headers: headers
+        get stories_feed_path
 
-        expect(response_article["organization_id"]).to eq nil
-        expect(response_article["organization"]).to eq nil
+        expect(response_article["organization_id"]).to be_nil
+        expect(response_article["organization"]).to be_nil
       end
     end
 
@@ -70,27 +122,31 @@ RSpec.describe "Stories::Feeds", type: :request do
       let(:tags) { nil }
 
       it "renders an empty tag list" do
-        get "/stories/feed", headers: headers
+        get stories_feed_path
 
-        expect(response_article["tag_list"]).to eq []
+        expect(response_article["tag_list"]).to be_empty
       end
     end
 
     context "when timeframe parameter is present" do
-      let(:feed_service) { Articles::Feed.new(number_of_articles: 1, page: 1, tag: []) }
+      let(:feed_service) { Articles::Feeds::LargeForemExperimental.new(number_of_articles: 1, page: 1, tag: []) }
 
       it "calls the feed service for a timeframe" do
-        allow(Articles::Feed).to receive(:new).and_return(feed_service)
-        allow(feed_service).to receive(:top_articles_by_timeframe).with(timeframe: "week").and_call_original
-        get "/stories/feed/week", headers: headers
-        expect(feed_service).to have_received(:top_articles_by_timeframe).with(timeframe: "week")
+        allow(Articles::Feeds::LargeForemExperimental).to receive(:new).and_return(feed_service)
+        allow(Articles::Feeds::Timeframe).to receive(:call).and_call_original
+
+        get timeframe_stories_feed_path(:week)
+
+        expect(Articles::Feeds::Timeframe).to have_received(:call).with("week", page: 1, tag: nil)
       end
 
       it "calls the feed service for latest" do
-        allow(Articles::Feed).to receive(:new).and_return(feed_service)
-        allow(feed_service).to receive(:latest_feed).and_call_original
-        get "/stories/feed/latest", headers: headers
-        expect(feed_service).to have_received(:latest_feed)
+        allow(Articles::Feeds::LargeForemExperimental).to receive(:new).and_return(feed_service)
+        allow(Articles::Feeds::Latest).to receive(:call).and_call_original
+
+        get timeframe_stories_feed_path(:latest)
+
+        expect(Articles::Feeds::Latest).to have_received(:call)
       end
     end
 
@@ -99,21 +155,36 @@ RSpec.describe "Stories::Feeds", type: :request do
         sign_in user
       end
 
-      it "sets a field test" do
-        expect do
-          get "/stories/feed"
-        end.to change(user.field_test_memberships, :count).by(1)
+      it "returns feed when feed_strategy is basic" do
+        allow(Settings::UserExperience).to receive(:feed_strategy).and_return("basic")
 
-        ftm = user.field_test_memberships.last
-        expect(ftm.experiment).to eq("user_home_feed")
+        get stories_feed_path
+
+        expect(response_article).to include(
+          "id" => article.id,
+          "title" => title,
+          "user_id" => user.id,
+          "user" => hash_including("name" => user.name),
+          "organization_id" => organization.id,
+          "organization" => hash_including("name" => organization.name),
+          "tag_list" => article.decorate.cached_tag_list_array,
+        )
       end
-    end
 
-    context "when there are no params passed (base feed) and user is not signed in" do
-      it "sets a field test" do
-        expect do
-          get "/stories/feed"
-        end.not_to change(FieldTest::Membership, :count)
+      it "returns feed when feed_strategy is large_forem_experimental" do
+        allow(Settings::UserExperience).to receive(:feed_strategy).and_return("large_forem_experimental")
+
+        get stories_feed_path
+
+        expect(response_article).to include(
+          "id" => article.id,
+          "title" => title,
+          "user_id" => user.id,
+          "user" => hash_including("name" => user.name),
+          "organization_id" => organization.id,
+          "organization" => hash_including("name" => organization.name),
+          "tag_list" => article.decorate.cached_tag_list_array,
+        )
       end
     end
 
@@ -122,24 +193,25 @@ RSpec.describe "Stories::Feeds", type: :request do
       let(:article) { comment.commentable }
 
       it "renders top comments for the article" do
-        get "/stories/feed/infinity", headers: headers
+        get timeframe_stories_feed_path(:infinity)
 
         expect(response_article["top_comments"]).not_to be_nil
         expect(response_article["top_comments"].first["username"]).not_to be_nil
       end
     end
 
-    context "when user is signed in but there's no field_test" do
-      before do
-        sign_in user
-      end
+    context "when there are low-scoring articles" do
+      let!(:article) { create(:article, featured: false) }
 
-      it "does not sets a field test" do
-        allow_any_instance_of(Stories::FeedsController).to receive(:field_test) # rubocop:disable RSpec/AnyInstance
+      it "excludes low-score article but not mid-score" do
+        article_with_mid_score = create(:article, score: Settings::UserExperience.home_feed_minimum_score)
+        article_with_low_score = create(:article, score: Articles::Feeds::Latest::MINIMUM_SCORE)
 
-        expect do
-          get "/stories/feed"
-        end.not_to change(user.field_test_memberships, :count)
+        get timeframe_stories_feed_path(:latest)
+
+        response_array = response.parsed_body.pluck("title")
+        expect(response_array).to contain_exactly(article.title, article_with_mid_score.title)
+        expect(response_array).not_to include(article_with_low_score.title)
       end
     end
   end

@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe "CommentsUpdate", type: :request do
+RSpec.describe "CommentsUpdate" do
   let(:user) { create(:user) }
   let(:article) { create(:article, user_id: user.id) }
   let(:comment) { create(:comment, user_id: user.id, commentable: article) }
@@ -16,5 +16,14 @@ RSpec.describe "CommentsUpdate", type: :request do
       comment: { body_markdown: new_body }
     }
     expect(Comment.last.processed_html).to include(new_body)
+  end
+
+  it "doesn't redirect" do
+    new_body = "NEW TITLE #{rand(100)}"
+    put "/comments/#{comment.id}", params: {
+      comment: { body_markdown: new_body }
+    }
+    expect(response).not_to have_http_status(:redirect)
+    expect(response).to have_http_status(:ok)
   end
 end

@@ -1,4 +1,3 @@
-
 /* global checkUserLoggedIn */
 
 function removeExistingCSRF() {
@@ -11,49 +10,62 @@ function removeExistingCSRF() {
 }
 
 function fetchBaseData() {
-  var xmlhttp;
-  if (window.XMLHttpRequest) {
-    xmlhttp = new XMLHttpRequest();
-  } else {
-    xmlhttp = new ActiveXObject('Microsoft.XMLHTTP');
-  }
-  xmlhttp.onreadystatechange = () => {
-    if (xmlhttp.readyState === XMLHttpRequest.DONE) {
-      // Assigning CSRF
-      var json = JSON.parse(xmlhttp.responseText);
-      if (json.token) {
-        removeExistingCSRF();
-      }
-      var newCsrfParamMeta = document.createElement('meta');
-      newCsrfParamMeta.name = 'csrf-param';
-      newCsrfParamMeta.content = json.param;
-      document.head.appendChild(newCsrfParamMeta);
-      var newCsrfTokenMeta = document.createElement('meta');
-      newCsrfTokenMeta.name = 'csrf-token';
-      newCsrfTokenMeta.content = json.token;
-      document.head.appendChild(newCsrfTokenMeta);
-      document.body.dataset.loaded = 'true';
+  fetch('/async_info/base_data')
+    .then((response) => response.json())
+    .then(
+      ({
+        token,
+        param,
+        broadcast,
+        user,
+        creator,
+        client_geolocation,
+        default_email_optin_allowed,
+      }) => {
+        if (token) {
+          removeExistingCSRF();
+        }
 
-      // Assigning Broadcast
-      if (json.broadcast) {
-        document.body.dataset.broadcast = json.broadcast;
-      }
+        const newCsrfParamMeta = document.createElement('meta');
+        newCsrfParamMeta.name = 'csrf-param';
+        newCsrfParamMeta.content = param;
+        document.head.appendChild(newCsrfParamMeta);
 
-      // Assigning User
-      if (checkUserLoggedIn()) {
-        document.body.dataset.user = json.user;
-        browserStoreCache('set', json.user);
-        setTimeout(() => {
-          if (typeof ga === 'function') {
-            ga('set', 'userId', JSON.parse(json.user).id);
-          }
-        }, 400);
-      }
-    }
-  };
+        const newCsrfTokenMeta = document.createElement('meta');
+        newCsrfTokenMeta.name = 'csrf-token';
+        newCsrfTokenMeta.content = token;
+        document.head.appendChild(newCsrfTokenMeta);
+        document.body.dataset.loaded = 'true';
 
-  xmlhttp.open('GET', '/async_info/base_data', true);
-  xmlhttp.send();
+        if (broadcast) {
+          document.body.dataset.broadcast = broadcast;
+        }
+
+        if (checkUserLoggedIn()) {
+          document.body.dataset.user = user;
+          document.body.dataset.creator = creator;
+          document.body.dataset.clientGeolocation =
+            JSON.stringify(client_geolocation);
+          document.body.dataset.default_email_optin_allowed =
+            default_email_optin_allowed;
+          browserStoreCache('set', user);
+
+          setTimeout(() => {
+            if (typeof ga === 'function') {
+              ga('set', 'userId', JSON.parse(user).id);
+            }
+            if (typeof gtag === 'function') {
+              gtag('set', 'user_Id', JSON.parse(user).id);
+            }
+          }, 400);
+        } else {
+          // Ensure user data is not exposed if no one is logged in
+          delete document.body.dataset.user;
+          delete document.body.dataset.creator;
+          browserStoreCache('remove');
+        }
+      },
+    );
 }
 
 function initializeBodyData() {

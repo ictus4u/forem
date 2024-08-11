@@ -1,13 +1,21 @@
 Hey <%= @user.name %>!
 
-This is an email to let you know that we've upgraded your account to have basic mod privileges. This means you can apply "negative reactions" to posts as well as certain other actions which help us maintain a constructive community and uphold our code of conduct.
+Good news! You’ve been granted Trusted Member permissions on <%= community_name %>!
 
-There are no specific responsibilities with this new privilege except that you use it respectfully and empathetically. If for any reason you'd like to forego these new features, let us know.
+From now on, a shield icon will be visible on post pages. Simply click on it to take *private* actions on community content.
 
-You'll occasionally get on-site notifications asking you to take an action. You are never required to take any actions and feel free to unsubscribe in your notification settings at any point without giving up the rest of the features.
+Here's an overview of your new abilities:
 
-Visit <%= app_url("/community-moderation") %> for full details of what you can do with these new privileges.
+- Rank content (👎👍) with emoji reactions
+- Rate the experience level of posts
+- Use the Flag to Admins icon 🧐 to report problematic content
 
-Happy <%= SiteConfig.community_action %>!
+<% if Page.find_by(slug: "trusted-member") %>
+  For full details on your new role and instructions on how to get started:
 
-- <%= community_name %> Team
+  <%= app_url("trusted-member") %>
+<% end %>
+
+Thank you for being an awesome member of our community. Let’s work together to create a welcoming and constructive space!
+
+<%= community_name %> Team

@@ -27,6 +27,13 @@ RSpec.describe Notifications::NewComment::Send, type: :service do
     expect(notification.json_data["user"]["username"]).to eq(child_comment.user.username)
   end
 
+  it "does not send if comment has negative score already" do
+    prior_notification_size = Notification.all.size
+    child_comment.update_column(:score, -1)
+    described_class.call(child_comment)
+    expect(Notification.all.size).to eq prior_notification_size
+  end
+
   it "creates the correct comment data for the notification" do
     described_class.call(child_comment)
 
@@ -91,19 +98,15 @@ RSpec.describe Notifications::NewComment::Send, type: :service do
                               organization_id: organization.id)).to be_any
   end
 
-  it "sends Push Notifications using Pusher Beams when configured" do
-    allow(ApplicationConfig).to receive(:[]).with("PUSHER_BEAMS_KEY").and_return("x" * 64)
-    allow(ApplicationConfig).to receive(:[]).with("APP_PROTOCOL").and_return("http://")
-    allow(ApplicationConfig).to receive(:[]).with("APP_DOMAIN").and_return("localhost:3000")
+  it "properly filters users for sending mobile push notifications" do
+    user.notification_setting.update(mobile_comment_notifications: true)
+    user2.notification_setting.update(mobile_comment_notifications: true)
+    user3.notification_setting.update(mobile_comment_notifications: true)
+    allow(PushNotifications::Send).to receive(:call)
 
-    allow(Pusher::PushNotifications).to receive(:publish_to_interests)
-
-    comment_sent = child_comment
-    described_class.call(comment_sent)
-
-    channels = ["user-notifications-#{user2.id}", "user-notifications-#{user.id}"]
-    payload = described_class.new(comment_sent).__send__(:push_notification_payload)
-    expect(Pusher::PushNotifications).to have_received(:publish_to_interests).with(interests: channels,
-                                                                                   payload: payload)
+    described_class.call(comment)
+    expect(PushNotifications::Send).to have_received(:call).with hash_including(
+      user_ids: [author_comment.user_id],
+    )
   end
 end

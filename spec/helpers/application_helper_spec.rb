@@ -1,19 +1,158 @@
 require "rails_helper"
 
-RSpec.describe ApplicationHelper, type: :helper do
+RSpec.describe ApplicationHelper do
   include CloudinaryHelper
+
+  describe "constant definitions" do
+    it "defines LARGE_USERBASE_THRESHOLD" do
+      expect(described_class::LARGE_USERBASE_THRESHOLD).to eq 1000
+    end
+
+    it "defines SUBTITLES" do
+      subtitles = {
+        "week" => "Top posts this week",
+        "month" => "Top posts this month",
+        "year" => "Top posts this year",
+        "infinity" => "All posts",
+        "latest" => "Latest posts"
+      }
+
+      expect(Class.new.include(described_class).new.subtitles).to eq subtitles
+    end
+  end
 
   describe "#community_name" do
     it "equals to the community name" do
-      SiteConfig.community_name = "SLOAN"
+      allow(Settings::Community).to receive(:community_name).and_return("SLOAN")
       expect(helper.community_name).to eq("SLOAN")
     end
   end
 
-  describe "#community_qualified_name" do
-    it "equals to the full qualified community name" do
-      expected_name = "#{SiteConfig.community_name} Community"
-      expect(helper.community_qualified_name).to eq(expected_name)
+  describe "#display_navigation_link?" do
+    subject(:method_call) { helper.display_navigation_link?(link: link) }
+
+    let(:link) { build(:navigation_link, display_to: display_to) }
+
+    before do
+      allow(helper).to receive(:user_signed_in?).and_return(user_signed_in)
+      allow(helper).to receive(:navigation_link_is_for_an_enabled_feature?)
+        .with(link: link)
+        .and_return(navigation_link_is_for_an_enabled_feature)
+    end
+
+    context "when user signed in and link requires signin and feature enabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { true }
+      let(:display_to) { :logged_in }
+      let(:user_signed_in) { true }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context "when user signed in and link requires signin and feature disabled" do
+      let(:display_to) { :all }
+      let(:user_signed_in) { true }
+      let(:navigation_link_is_for_an_enabled_feature) { false }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context "when user signed in and link **does not** require signin and feature enabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { true }
+      let(:display_to) { :all }
+      let(:user_signed_in) { true }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context "when user signed in and link requires signout and feature enabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { true }
+      let(:display_to) { :logged_out }
+      let(:user_signed_in) { true }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context "when user signed in and link requires signout and feature disabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { false }
+      let(:display_to) { :logged_out }
+      let(:user_signed_in) { true }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context "when user signed in and link **does not** require signin and feature disabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { false }
+      let(:display_to) { :all }
+      let(:user_signed_in) { true }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context "when user **not** signed in and link requires signin and feature enabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { true }
+      let(:display_to) { :logged_in }
+      let(:user_signed_in) { false }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context "when user **not** signed in and link **does not** require signin and feature enabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { true }
+      let(:display_to) { :all }
+      let(:user_signed_in) { false }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context "when user **not** signed in and link **does not** require signin and feature disabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { false }
+      let(:display_to) { :all }
+      let(:user_signed_in) { false }
+
+      it { is_expected.to be_falsey }
+    end
+
+    context "when user **not** signed in and link requires signout and feature enabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { true }
+      let(:display_to) { :logged_out }
+      let(:user_signed_in) { false }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context "when user **not** signed in and link requires signout and feature disabled" do
+      let(:navigation_link_is_for_an_enabled_feature) { false }
+      let(:display_to) { :logged_out }
+      let(:user_signed_in) { false }
+
+      it { is_expected.to be_falsey }
+    end
+  end
+
+  describe "#navigation_link_is_for_an_enabled_feature?" do
+    subject(:method_call) { helper.navigation_link_is_for_an_enabled_feature?(link: link) }
+
+    let(:url) { URL.url("/somehwere") }
+    let(:link) { build(:navigation_link, url: url) }
+
+    context "when Listing feature is enabled" do
+      before { allow(Listing).to receive(:feature_enabled?).and_return(true) }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context "when Listing feature is disabled and link not for listing" do
+      before { allow(Listing).to receive(:feature_enabled?).and_return(false) }
+
+      it { is_expected.to be_truthy }
+    end
+
+    context "when Listing feature is disabled and link is for /listings" do
+      let(:url) { URL.url("/listings") }
+
+      before { allow(Listing).to receive(:feature_enabled?).and_return(false) }
+
+      it { is_expected.to be_falsey }
     end
   end
 
@@ -36,20 +175,31 @@ RSpec.describe ApplicationHelper, type: :helper do
   end
 
   describe "#release_adjusted_cache_key" do
+    after { ForemInstance.instance_variable_set(:@deployed_at, nil) }
+
     it "does nothing when RELEASE_FOOTPRINT is not set" do
       allow(ApplicationConfig).to receive(:[]).with("RELEASE_FOOTPRINT").and_return(nil)
-      expect(helper.release_adjusted_cache_key("cache-me")).to eq("cache-me")
+      expect(helper.release_adjusted_cache_key("cache-me")).to include("cache-me")
     end
 
     it "appends the RELEASE_FOOTPRINT if it is set" do
       allow(ApplicationConfig).to receive(:[]).with("RELEASE_FOOTPRINT").and_return("abc123")
-      expect(helper.release_adjusted_cache_key("cache-me")).to eq("cache-me--abc123")
+      expect(helper.release_adjusted_cache_key("cache-me")).to include("cache-me--abc123")
     end
 
     it "includes locale param if it is set" do
       allow(ApplicationConfig).to receive(:[]).with("RELEASE_FOOTPRINT").and_return("abc123")
       params[:locale] = "fr-ca"
-      expect(helper.release_adjusted_cache_key("cache-me")).to eq("cache-me-fr-ca-abc123")
+      expect(helper.release_adjusted_cache_key("cache-me")).to include("cache-me-fr-ca-abc123")
+    end
+
+    it "includes Settings::General.admin_action_taken_at" do
+      Timecop.freeze do
+        allow(Settings::General).to receive(:admin_action_taken_at).and_return(5.minutes.ago)
+        allow(ApplicationConfig).to receive(:[]).with("RELEASE_FOOTPRINT").and_return("abc123")
+        expect(helper.release_adjusted_cache_key("cache-me"))
+          .to include(Settings::General.admin_action_taken_at.rfc3339)
+      end
     end
   end
 
@@ -58,21 +208,21 @@ RSpec.describe ApplicationHelper, type: :helper do
 
     context "when the start year and current year is the same" do
       it "returns the current year only" do
-        SiteConfig.community_copyright_start_year = current_year
+        allow(Settings::Community).to receive(:copyright_start_year).and_return(current_year)
         expect(helper.copyright_notice).to eq(current_year)
       end
     end
 
     context "when the start year and current year is different" do
       it "returns the start and current year" do
-        SiteConfig.community_copyright_start_year = "2014"
+        allow(Settings::Community).to receive(:copyright_start_year).and_return("2014")
         expect(helper.copyright_notice).to eq("2014 - #{current_year}")
       end
     end
 
     context "when the start year is blank" do
       it "returns the current year" do
-        SiteConfig.community_copyright_start_year = " "
+        allow(Settings::Community).to receive(:copyright_start_year).and_return(" ")
         expect(helper.copyright_notice).to eq(current_year)
       end
     end
@@ -82,7 +232,7 @@ RSpec.describe ApplicationHelper, type: :helper do
     before do
       allow(ApplicationConfig).to receive(:[]).with("APP_PROTOCOL").and_return("https://")
       allow(ApplicationConfig).to receive(:[]).with("APP_DOMAIN").and_return("dev.to")
-      allow(SiteConfig).to receive(:app_domain).and_return("dev.to")
+      allow(Settings::General).to receive(:app_domain).and_return("dev.to")
     end
 
     it "creates the correct base app URL" do
@@ -98,22 +248,8 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
 
     it "works when called with an URI object" do
-      uri = URI::Generic.build(path: "resource_admin", fragment: "test")
+      uri = URI::Generic.build(path: "resource_admin", fragment: "test").to_s
       expect(app_url(uri)).to eq("https://dev.to/resource_admin#test")
-    end
-  end
-
-  describe "#sanitized_referer" do
-    it "returns a safe referrer unmodified" do
-      expect(sanitized_referer("/some/path")).to eq("/some/path")
-    end
-
-    it "returns nil if the referer is the service worker" do
-      expect(sanitized_referer("/serviceworker.js")).to be nil
-    end
-
-    it "returns nil if the referer is empty" do
-      expect(sanitized_referer("")).to be nil
     end
   end
 
@@ -121,7 +257,7 @@ RSpec.describe ApplicationHelper, type: :helper do
     let(:collection) { create(:collection, :with_articles) }
 
     it "returns an 'a' tag" do
-      expect(helper.collection_link(collection)).to have_selector("a")
+      expect(helper.collection_link(collection)).to have_link
     end
 
     it "sets the correct href" do
@@ -134,34 +270,24 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
   end
 
-  describe "#email_link" do
+  describe "#contact_link" do
+    let(:default_email) { "hi@dev.to" }
+
     before do
-      allow(SiteConfig).to receive(:email_addresses).and_return(
-        {
-          default: "hi@dev.to",
-          business: "business@dev.to",
-          privacy: "privacy@dev.to",
-          members: "members@dev.to"
-        },
-      )
+      allow(ForemInstance).to receive(:contact_email).and_return(default_email)
     end
 
     it "returns an 'a' tag" do
-      expect(helper.email_link).to have_selector("a")
+      expect(helper.contact_link).to have_link
     end
 
     it "sets the correct href" do
-      expect(helper.email_link).to have_link(href: "mailto:hi@dev.to")
-      expect(helper.email_link(:business)).to have_link(href: "mailto:business@dev.to")
+      expect(helper.contact_link).to have_link(href: "mailto:#{default_email}")
     end
 
     it "has the correct text in the a tag" do
-      expect(helper.email_link(text: "Link Name")).to have_text("Link Name")
-      expect(helper.email_link).to have_text("hi@dev.to")
-    end
-
-    it "returns the default email if it doesn't understand the type parameter" do
-      expect(helper.email_link(:nonsense)).to have_link(href: "mailto:hi@dev.to")
+      expect(helper.contact_link(text: "Link Name")).to have_text("Link Name")
+      expect(helper.contact_link).to have_text(default_email)
     end
 
     it "returns an href with additional_info parameters" do
@@ -170,15 +296,15 @@ RSpec.describe ApplicationHelper, type: :helper do
         body: "This is a longer body with a question mark ? \n and a newline"
       }
 
-      link = "<a href=\"mailto:hi@dev.to?body=This%20is%20a%20longer%20body%20with%20a%20" \
-        "question%20mark%20%3F%20%0A%20and%20a%20newline&amp;subject=This%20is%20a%20long%20subject\">text</a>"
-      expect(email_link(text: "text", additional_info: additional_info)).to eq(link)
+      link = "<a href=\"mailto:#{default_email}?body=This%20is%20a%20longer%20body%20with%20a%20" \
+             "question%20mark%20%3F%20%0A%20and%20a%20newline&amp;subject=This%20is%20a%20long%20subject\">text</a>"
+      expect(contact_link(text: "text", additional_info: additional_info)).to eq(link)
     end
   end
 
   describe "#community_members_label" do
     before do
-      allow(SiteConfig).to receive(:community_member_label).and_return("hobbyist")
+      allow(Settings::Community).to receive(:member_label).and_return("hobbyist")
     end
 
     it "returns the pluralized community_member_label" do
@@ -186,14 +312,7 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
   end
 
-  describe "#sanitize_and_decode" do
-    it "sanitize and decode string" do
-      expect(helper.sanitize_and_decode("<script>alert('alert')</script>")).to eq("alert('alert')")
-      expect(helper.sanitize_and_decode("&lt; hello")).to eq("< hello")
-    end
-  end
-
-  describe "#cloudinary" do
+  describe "#cloudinary", cloudinary: true do
     it "returns cloudinary-manipulated link" do
       image = helper.optimized_image_url(Faker::Placeholdit.image)
       expect(image).to start_with("https://res.cloudinary.com")
@@ -201,28 +320,45 @@ RSpec.describe ApplicationHelper, type: :helper do
     end
 
     it "returns an ASCII domain for Unicode input" do
-      expect(helper.optimized_image_url("https://www.火.dev/image.png")).to include("https://www.xn--vnx.dev")
+      expect(helper.optimized_image_url("https://www.火.dev/IMAGE.png")).to include("https://www.xn--vnx.dev/IMAGE.png")
     end
 
     it "keeps an ASCII domain as ASCII" do
       expect(helper.optimized_image_url("https://www.xn--vnx.dev/image.png")).to include("https://www.xn--vnx.dev")
     end
+
+    it "returns random fallback images as expected" do
+      expect(helper.optimized_image_url("")).not_to be_nil
+      expect(helper.optimized_image_url("", random_fallback: false)).to be_nil
+    end
   end
 
   describe "#optimized_image_tag" do
-    it "works just like cl_image_tag" do
+    it "works just like cl_image_tag", cloudinary: true do
       image_url = "https://i.imgur.com/fKYKgo4.png"
       cloudinary_image_tag = cl_image_tag(image_url,
-                                          type: "fetch", crop: "imagga_scale",
+                                          type: "fetch", crop: "fill",
                                           quality: "auto", flags: "progressive",
                                           fetch_format: "auto", sign_url: true,
                                           loading: "lazy", alt: "profile image",
                                           width: 100, height: 100)
       optimized_helper = helper.optimized_image_tag(image_url,
-                                                    optimizer_options: { crop: "imagga_scale", width: 100,
+                                                    optimizer_options: { crop: "crop", width: 100,
                                                                          height: 100 },
                                                     image_options: { loading: "lazy", alt: "profile image" })
       expect(optimized_helper).to eq(cloudinary_image_tag)
+    end
+  end
+
+  describe "#application_policy_content_tag" do
+    subject(:content) do
+      application_policy_content_tag("p", record: Article, query: :create?, class: "something") do
+        "My Content"
+      end
+    end
+
+    it "adds the policy related classes to the HTML tag element element" do
+      expect(content).to include(%(<p class="something js-policy-article-create">My Content</p>))
     end
   end
 end

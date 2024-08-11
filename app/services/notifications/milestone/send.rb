@@ -3,16 +3,16 @@ module Notifications
     ARTICLE_FINAL_PUBLICATION_TIME_FOR_MILESTONE = Time.zone.local(2019, 2, 25)
 
     class Send
+      def self.call(...)
+        new(...).call
+      end
+
       # @param type [String] - "View" or "Reaction"
       # @param article [Object] - ActiveRecord Article object
       def initialize(type, article)
         @type = type
         @article = article
         @next_milestone = next_milestone
-      end
-
-      def self.call(*args)
-        new(*args).call
       end
 
       def call
@@ -38,7 +38,8 @@ module Notifications
       end
 
       def json_data
-        { article: Notifications.article_data(article), gif_id: RandomGif.random_id }
+        gif_id = Constants::RandomGifs::IDS.sample
+        { article: Notifications.article_data(article), gif_id: gif_id }
       end
 
       def article_published_behind_time?

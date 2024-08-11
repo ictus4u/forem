@@ -2,7 +2,7 @@
 
 .crayons-snackbar {
   position: fixed;
-  z-index: 9999; // todo: make z-index a variable..
+  z-index: var(--z-popover);
   left: var(--su-2);
   right: var(--su-2);
   bottom: var(--su-2);
@@ -19,12 +19,11 @@
   }
 
   &__item {
-    @include generate-box(
-      $level: 1,
-      $bg: var(--snackbar-bg),
-      $border: var(--snackbar-border),
-      $color: var(--snackbar-color)
-    );
+    border-radius: var(--radius);
+    background: var(--snackbar-bg);
+    color: var(--snackbar-color);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+      0 4px 6px -2px rgba(0, 0, 0, 0.05);
     display: none;
     align-items: center;
     justify-content: space-between;

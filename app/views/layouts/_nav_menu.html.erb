@@ -1,59 +1,36 @@
-<div class="crayons-dropdown left-2 right-2 s:left-auto p-0 top-bar__menu__dropdown">
-  <% if user_signed_in? %>
-    <div id="user-profile-link-placeholder" class="border-0 border-b-1 border-solid border-base-20 p-1">
-      <a id="first-nav-link" class="crayons-link crayons-link--block">
+<div class="crayons-dropdown left-2 right-2 s:left-auto crayons-header__menu__dropdown inline-block m:-mr-2 top-100">
+  <ul class="m-0" id="crayons-header__menu__dropdown__list">
+    <li id="user-profile-link-placeholder" class="border-0 border-b-1 border-solid border-base-20 pb-2 mb-2">
+      <a href="#" id="first-nav-link" class="c-link c-link--default c-link--block lh-tight">
         <div>
-          <span class="fw-medium block">...</span>
-          <small class="fs-s color-base-50"></small>
+          <span class="fw-medium block"><%= t("views.main.nav.placeholder") %></span>
+          <small class="fs-s opacity-75"></small>
         </div>
       </a>
-    </div>
+    </li>
 
-    <div class="border-0 border-b-1 border-solid border-base-20 p-1">
-      <a href="<%= dashboard_path %>" class="crayons-link crayons-link--block">Dashboard</a>
-      <a href="<%= new_path %>" class="crayons-link crayons-link--block">Write a Post</a>
-      <a href="<%= readinglist_path %>" class="crayons-link crayons-link--block">Reading list</a>
-      <a href="<%= user_settings_path %>" class="crayons-link crayons-link--block">Settings</a>
-      <a href="<%= information_path %>" class="crayons-link crayons-link--block" id="second-last-nav-link">Key Links</a>
-    </div>
-    <div class="p-1">
-      <a href="<%= signout_confirm_path %>" class="crayons-link crayons-link--block" id="last-nav-link">Sign Out</a>
-    </div>
+    <li class="js-header-menu-admin-link hidden">
+      <a href="<%= admin_path %>" class="c-link c-link--block" data-no-instant><%= t("views.main.nav.admin") %></a>
+    </li>
+    <li>
+      <a href="<%= dashboard_path %>" class="c-link c-link--block"><%= t("views.main.nav.dashboard") %></a>
+    </li>
+    <li>
+      <a href="<%= mod_path %>" class="c-link c-link--block trusted-visible-block"><%= t("views.main.nav.moderator_center") %></a>
+    </li>
+    <%= application_policy_content_tag("li", record: Article, query: :create?) do %>
+      <a href="<%= new_path %>" class="c-link c-link--block"><%= t("views.main.create_post") %></a>
+    <% end %>
+    <li>
+      <a href="<%= readinglist_path %>" class="c-link c-link--block"><%= t("views.main.nav.list") %></a>
+    </li>
+    <li class="border-0 border-b-1 border-solid border-base-20 pb-2">
+      <a href="<%= user_settings_path %>" class="c-link c-link--block" id="second-last-nav-link"><%= t("views.main.nav.settings") %></a>
+    </li>
 
-  <% else %>
-    <div class="authentication-header__container border-0 border-b-1 border-solid border-base-20">
-      <figure class="authentication-header__image-container">
-        <img class="authentication-header__image" src="<%= optimized_image_url(safe_logo_url(SiteConfig.secondary_logo_url), width: 190) %>"
-              alt="Secondary <%= community_name %> logo" />
-      </figure>
-      <div class="authentication-header__content">
-        <h2 class="authentication-header__title">
-          <a href="/"><%= community_name %></a> is a community of <%= number_with_delimiter User.registered.estimated_count %> amazing <%= community_members_label %>
-        </h2>
-        <p class="authentication-header__description">
-          <% if SiteConfig.tagline.present? %>
-            <%= SiteConfig.tagline %>
-          <% else %>
-            Log in to customize your experience and get involved.
-          <% end %>
-        </p>
-        <div class="authentication-header__actions">
-          <a href="<%= sign_up_path(state: "new-user") %>" class="crayons-btn" aria-label="Create new account">
-            Create new account
-          </a>
-          <a href="<%= sign_up_path %>" class="crayons-btn crayons-btn--ghost-brand" aria-label="Log in">
-            Log in
-          </a>
-        </div>
-      </div>
-    </div>
-    <div class="border-0 border-b-1 border-solid border-base-20 p-1">
-      <a href="<%= about_path %>" class="crayons-link crayons-link--block" id="last-nav-link">
-        About <%= community_name %>
-      </a>
-      <a href="<%= information_path %>" class="crayons-link crayons-link--block" id="last-nav-link">
-        Learn more
-      </a>
-    </div>
-  <% end %>
+    <li class="pt-2">
+      <a href="<%= signout_confirm_path %>" class="c-link c-link--block" id="last-nav-link"><%= t("views.main.signout") %></a>
+    </li>
+  </ul>
 </div>
+<%= javascript_include_tag "applyApplicationPolicyToggles", defer: true %>

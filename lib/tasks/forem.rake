@@ -1,13 +1,12 @@
 namespace :forem do
   desc "Performs basic setup for new Forem instances"
+  # Since we execute this tasks in bin/setup as well as app_initializer:setup
+  # everything happening here needs to be idempotent.
   task setup: :environment do
-    puts "\n== Setting up profile fields =="
-    # TODO: [@forem/oss] Remove the destroy_all call
-    ProfileField.destroy_all
-    ProfileFields::AddBaseFields.call
+    Rake::Task["navigation_links:create"].invoke
   end
 
   task health_check_token: :environment do
-    puts SiteConfig.health_check_token
+    puts Settings::General.health_check_token
   end
 end

@@ -1,7 +1,7 @@
 require "rails_helper"
 
-RSpec.describe "UserSettings", type: :request do
-  let(:user) { create(:user, twitch_username: nil) }
+RSpec.describe "UserSettings" do
+  let(:user) { create(:user) }
 
   describe "GET /settings/:tab" do
     context "when not signed-in" do
@@ -15,9 +15,10 @@ RSpec.describe "UserSettings", type: :request do
       before { sign_in user }
 
       it "renders various settings tabs properly" do
-        %w[organization misc account ux].each do |tab|
-          get "/settings/#{tab}"
-          expect(response.body).to include("Settings for")
+        Constants::Settings::TAB_LIST.each do |tab|
+          get user_settings_path(tab.downcase.tr(" ", "-"))
+
+          expect(response.body).to include("@#{user.username}")
         end
       end
 
@@ -26,37 +27,91 @@ RSpec.describe "UserSettings", type: :request do
           .to raise_error(ActiveRecord::RecordNotFound)
       end
 
-      it "displays content on ux tab properly" do
-        get "/settings/ux"
-        expect(response.body).to include("Style Customization")
+      it "displays content on Profile tab properly" do
+        get user_settings_path(:profile)
+
+        expect(response.body).to include("User")
       end
 
-      it "displays content on misc tab properly" do
-        get "/settings/misc"
-        expect(response.body).to include("Connect", "Languages", "Sponsors", "Announcements", "Export Content")
+      it "displays profile groups content on Profile tab" do
+        profile_field = create(:profile_field)
+
+        get user_settings_path(:profile)
+
+        expect(response.body).to include(profile_field.profile_field_group.name)
       end
 
-      it "displays content on RSS tab properly" do
-        get "/settings/publishing-from-rss"
-        title = "Publishing to #{SiteConfig.community_name} from RSS"
-        expect(response.body).to include(title)
+      it "displays content on Customization tab properly" do
+        get user_settings_path(:customization)
+
+        expect(response.body).to include("Appearance", "Writing", "Content", "Sponsors", "Announcements")
+      end
+
+      it "displays content on Notifications tab properly" do
+        get user_settings_path(:notifications)
+
+        expect(response.body).to include("Email notifications", "Mobile notifications", "General notifications")
+      end
+
+      it "displays moderator notifications second on Notifications tab if trusted" do
+        user.add_role(:trusted)
+
+        get user_settings_path(:notifications)
+
+        expect(response.body).to include("Moderator notifications")
+      end
+
+      it "displays content on Account tab properly" do
+        get user_settings_path(:account)
+
+        expect(response.body).to include("Set new password", "Account emails", "Danger Zone")
+      end
+
+      it "displays content on Billing tab properly" do
+        get user_settings_path(:billing)
+
+        expect(response.body).to include("Billing")
+      end
+
+      it "displays content on Organization tab properly" do
+        get user_settings_path(:organization)
+
+        expect(response.body).to include("Join An Organization", "Create An Organization")
+      end
+
+      it "displays content on Extensions tab properly" do
+        get user_settings_path(:extensions)
+
+        feed_section = "Publishing to #{Settings::Community.community_name} from RSS"
+        titles = ["Comment templates", feed_section, "API Keys"]
+        expect(response.body).to include(*titles)
+      end
+
+      it "includes contact us on RSS page properly" do
+        get user_settings_path(:extensions)
+        expect(response.body).to include(I18n.t("contact_prompts.if_any_questions_html"))
       end
 
       it "renders heads up dupe account message with proper param" do
         get "/settings?state=previous-registration"
+
         error_message = "There is an existing account authorized with that social account"
-        expect(response.body).to include error_message
+        expect(response.body).to include(error_message)
       end
 
       it "renders the proper response template" do
         response_template = create(:response_template, user: user)
+
         get user_settings_path(tab: "response-templates", id: response_template.id)
-        expect(response.body).to include "Editing a response template"
+
+        expect(response.body).to include("Edit comment template")
       end
     end
 
     describe ":account" do
       let(:remove_oauth_section) { "Remove OAuth Associations" }
+      let(:remove_oauth_description) { "You can remove one of your authentication methods" }
+      let(:remove_oauth_instructions) { "Please add another authentication method" }
       let(:user) { create(:user, :with_identity) }
 
       before do
@@ -69,27 +124,37 @@ RSpec.describe "UserSettings", type: :request do
         expect(response).to have_http_status(:ok)
       end
 
-      it "shows the 'Remove OAuth' section if a user has multiple enabled identities" do
+      it "shows the description if a user has multiple enabled identities" do
         allow(Authentication::Providers).to receive(:enabled).and_return(Authentication::Providers.available)
         providers = Authentication::Providers.available.first(2)
         allow(user).to receive(:identities).and_return(user.identities.where(provider: providers))
 
         get user_settings_path(tab: "account")
-        expect(response.body).to include(remove_oauth_section)
+        expect(response.body).to include(remove_oauth_description)
+        expect(response.body).not_to include(remove_oauth_instructions)
       end
 
-      it "hides the 'Remove OAuth' section if a user has one enabled identity" do
+      it "shows instructions how to remove an identity if a user has one enabled identity" do
         provider = Authentication::Providers.available.first
         allow(Authentication::Providers).to receive(:enabled).and_return([provider])
         allow(user).to receive(:identities).and_return(user.identities.where(provider: provider))
 
         get user_settings_path(tab: "account")
-        expect(response.body).not_to include(remove_oauth_section)
+        expect(response.body).not_to include(remove_oauth_description)
+        expect(response.body).to include(remove_oauth_instructions)
       end
 
-      it "hides the 'Remove OAuth' section if a user has one enabled identity and one disabled" do
+      it "shows instructions how to remove an identity if a user has one enabled identity and one disabled" do
         provider = Authentication::Providers.available.first
         allow(Authentication::Providers).to receive(:enabled).and_return([provider])
+
+        get user_settings_path(tab: "account")
+        expect(response.body).not_to include(remove_oauth_description)
+        expect(response.body).to include(remove_oauth_instructions)
+      end
+
+      it "hides the 'Remove OAuth' section if a user has no enabled identity" do
+        allow(Authentication::Providers).to receive(:enabled).and_return([])
 
         get user_settings_path(tab: "account")
         expect(response.body).not_to include(remove_oauth_section)
@@ -106,7 +171,7 @@ RSpec.describe "UserSettings", type: :request do
         user = create(:user, :with_identity, identities: [:github])
 
         sign_in user
-        get "/settings"
+        get user_settings_path
 
         expect(response.body).not_to include("Connect GitHub Account")
       end
@@ -117,7 +182,7 @@ RSpec.describe "UserSettings", type: :request do
         user = create(:user, :with_identity, identities: [:github])
 
         sign_in user
-        get "/settings"
+        get user_settings_path
 
         expect(response.body).not_to include("Connect GitHub Account")
       end
@@ -127,26 +192,61 @@ RSpec.describe "UserSettings", type: :request do
         user = create(:user, :with_identity, identities: [:twitter])
 
         sign_in user
-        get "/settings"
+        get user_settings_path
 
         expect(response.body).to include("Connect GitHub Account")
       end
+
+      it "does not allow to connect an Apple Account to an existing user" do
+        allow(Authentication::Providers).to receive(:enabled).and_return(Authentication::Providers.available)
+        user = create(:user, :with_identity, identities: [:twitter])
+
+        sign_in user
+        get user_settings_path
+
+        expect(response.body).to include("Connect GitHub Account")
+        expect(response.body).not_to include("Connect Apple Account")
+      end
     end
 
-    describe ":integrations" do
+    describe "GitHub repositories" do
       it "renders the repositories container if the user has authenticated through GitHub" do
+        allow(Authentication::Providers).to receive(:enabled).and_return(Authentication::Providers.available)
         user = create(:user, :with_identity, identities: [:github])
-        sign_in user
 
-        get user_settings_path(tab: :integrations)
+        sign_in user
+        get user_settings_path(:extensions)
+
         expect(response.body).to include("github-repos-container")
       end
 
       it "does not render anything if the user has not authenticated through GitHub" do
         sign_in user
+        get user_settings_path(:extensions)
 
-        get user_settings_path(tab: :integrations)
         expect(response.body).not_to include("github-repos-container")
+      end
+    end
+  end
+
+  describe "GET /settings/profile" do
+    before { sign_in user }
+
+    context "when user has profile image" do
+      it "displays profile image upload input" do
+        get user_settings_path(:profile)
+
+        expect(response.body).to include("user[profile_image]")
+      end
+    end
+
+    context "when user does not have a profile image" do
+      let(:user) { create(:user, profile_image: nil) }
+
+      it "displays profile image upload input" do
+        get user_settings_path(:profile)
+
+        expect(response.body).to include("user[profile_image]")
       end
     end
   end
@@ -154,71 +254,25 @@ RSpec.describe "UserSettings", type: :request do
   describe "PUT /update/:id" do
     before { sign_in user }
 
-    it "updates summary" do
-      put "/users/#{user.id}", params: { user: { tab: "profile", summary: "Hello new summary" } }
-      expect(user.summary).to eq("Hello new summary")
-    end
-
     it "updates profile_updated_at" do
       user.update_column(:profile_updated_at, 2.weeks.ago)
-      put "/users/#{user.id}", params: { user: { tab: "profile", summary: "Hello new summary" } }
+      put "/users/#{user.id}", params: { user: { tab: "profile", username: "new_username" } }
       expect(user.reload.profile_updated_at).to be > 2.minutes.ago
     end
 
-    it "disables reaction notifications" do
-      put "/users/#{user.id}", params: { user: { tab: "notifications", reaction_notifications: 0 } }
-      expect(user.reload.reaction_notifications).to be(false)
-    end
+    it "updates the users announcement display preferences (in both users and user_settings tables)" do
+      expect(user.setting.display_announcements).to be(true)
 
-    it "enables community-success notifications" do
-      put "/users/#{user.id}", params: { user: { tab: "notifications", mod_roundrobin_notifications: 1 } }
-      expect(user.reload.mod_roundrobin_notifications).to be(true)
-    end
-
-    it "updates the users announcement display preferences" do
       expect do
-        put "/users/#{user.id}", params: { user: { tab: "misc", display_announcements: 0 } }
-      end.to change { user.reload.display_announcements }.from(true).to(false)
-    end
+        put users_settings_path(user.setting.id), params: { users_setting: { display_announcements: 0 } }
+      end.to change { user.setting.reload.display_announcements }.from(true).to(false)
 
-    it "disables community-success notifications" do
-      put "/users/#{user.id}", params: { user: { tab: "notifications", mod_roundrobin_notifications: 0 } }
-      expect(user.reload.mod_roundrobin_notifications).to be(false)
-    end
-
-    it "can toggle welcome notifications" do
-      put "/users/#{user.id}", params: { user: { tab: "notifications", welcome_notifications: 0 } }
-      expect(user.reload.subscribed_to_welcome_notifications?).to be(false)
-
-      put "/users/#{user.id}", params: { user: { tab: "notifications", welcome_notifications: 1 } }
-      expect(user.reload.subscribed_to_welcome_notifications?).to be(true)
+      expect(user.setting.reload.display_announcements).to be(false)
     end
 
     it "updates username to too short username" do
       put "/users/#{user.id}", params: { user: { tab: "profile", username: "h" } }
       expect(response.body).to include("Username is too short")
-    end
-
-    it "returns error if Profile image is too large" do
-      profile_image = fixture_file_upload("files/large_profile_img.jpg", "image/jpeg")
-      put "/users/#{user.id}", params: { user: { tab: "profile", profile_image: profile_image } }
-      expect(response.body).to include("Profile image File size should be less than 2 MB")
-    end
-
-    it "returns error if Profile image file name is too long" do
-      profile_image = fixture_file_upload("files/800x600.png", "image/png")
-      allow(profile_image).to receive(:original_filename).and_return("#{'a_very_long_filename' * 15}.png")
-
-      put "/users/#{user.id}", params: { user: { tab: "profile", profile_image: profile_image } }
-
-      expect(response).to have_http_status(:bad_request)
-    end
-
-    it "returns error if Profile image is not a file" do
-      profile_image = "A String"
-      put "/users/#{user.id}", params: { user: { tab: "profile", profile_image: profile_image } }
-
-      expect(response).to have_http_status(:bad_request)
     end
 
     it "returns error message if user can't be saved" do
@@ -235,9 +289,7 @@ RSpec.describe "UserSettings", type: :request do
 
     context "when requesting an export of the articles" do
       def send_request(export_requested: true)
-        put "/users/#{user.id}", params: {
-          user: { tab: "misc", export_requested: export_requested }
-        }
+        put user_path(user.id), params: { user: { tab: :account, export_requested: export_requested } }
       end
 
       it "updates export_requested flag" do
@@ -263,6 +315,7 @@ RSpec.describe "UserSettings", type: :request do
       end
 
       it "sends an email" do
+        allow(ForemInstance).to receive(:smtp_enabled?).and_return(true)
         expect do
           sidekiq_perform_enqueued_jobs do
             send_request
@@ -276,70 +329,22 @@ RSpec.describe "UserSettings", type: :request do
         end
       end
     end
-  end
 
-  describe "POST /users/update_twitch_username" do
-    before { sign_in user }
-
-    it "updates twitch username" do
-      post "/users/update_twitch_username", params: { user: { twitch_username: "anna_lightalloy" } }
-      user.reload
-      expect(user.twitch_username).to eq("anna_lightalloy")
-    end
-
-    it "redirects after updating" do
-      post "/users/update_twitch_username", params: { user: { twitch_username: "anna_lightalloy" } }
-      expect(response).to redirect_to "/settings/integrations"
-    end
-
-    it "schedules the job while updating" do
-      sidekiq_assert_enqueued_with(job: Streams::TwitchWebhookRegistrationWorker, args: [user.id]) do
-        post "/users/update_twitch_username", params: { user: { twitch_username: "anna_lightalloy" } }
+    context "when requesting a fetch of the feed", vcr: { cassette_name: "feeds_import_medium_vaidehi" } do
+      let(:feed_url) { "https://medium.com/feed/@vaidehijoshi" }
+      let(:user) do
+        u = create(:user)
+        u.setting.update(feed_url: feed_url)
+        u
       end
-    end
 
-    it "removes twitch_username" do
-      user.update_column(:twitch_username, "robot")
-      post "/users/update_twitch_username", params: { user: { twitch_username: "" } }
-      user.reload
-      expect(user.twitch_username).to be_nil
-    end
+      it "invokes Feeds::ImportArticlesWorker" do
+        allow(Feeds::ImportArticlesWorker).to receive(:perform_async).with(user.id)
 
-    it "doesn't schedule the job when removing" do
-      sidekiq_assert_no_enqueued_jobs(only: Streams::TwitchWebhookRegistrationWorker) do
-        post "/users/update_twitch_username", params: { user: { twitch_username: "" } }
+        put users_settings_path(user.setting.id), params: { users_setting: { feed_url: feed_url } }
+
+        expect(Feeds::ImportArticlesWorker).to have_received(:perform_async).with(user.id)
       end
-    end
-
-    it "doesn't schedule the job when saving the same twitch username" do
-      user.update_column(:twitch_username, "robot")
-      sidekiq_assert_no_enqueued_jobs(only: Streams::TwitchWebhookRegistrationWorker) do
-        post "/users/update_twitch_username", params: { user: { twitch_username: "robot" } }
-      end
-    end
-  end
-
-  describe "POST /users/update_language_settings" do
-    before { sign_in user }
-
-    it "updates language settings" do
-      post "/users/update_language_settings", params: { user: { preferred_languages: %w[ja es] } }
-      user.reload
-      expect(user.language_settings["preferred_languages"]).to eq(%w[ja es])
-    end
-
-    it "keeps the estimated_default_language" do
-      user.update_column(:language_settings, estimated_default_language: "ru", preferred_languages: %w[en es])
-      post "/users/update_language_settings", params: { user: { preferred_languages: %w[it en] } }
-      user.reload
-      expect(user.language_settings["estimated_default_language"]).to eq("ru")
-    end
-
-    it "doesn't set non-existent languages" do
-      user.update_column(:language_settings, estimated_default_language: "ru", preferred_languages: %w[en es])
-      post "/users/update_language_settings", params: { user: { preferred_languages: %w[it en blah] } }
-      user.reload
-      expect(user.language_settings["preferred_languages"].sort).to eq(%w[en it])
     end
   end
 
@@ -351,36 +356,37 @@ RSpec.describe "UserSettings", type: :request do
 
       before do
         omniauth_mock_providers_payload
+        allow(Settings::Authentication).to receive(:providers).and_return(Authentication::Providers.available)
         sign_in user
       end
 
       it "removes the correct identity" do
         expect do
-          delete "/users/remove_identity", params: { provider: provider }
+          delete users_remove_identity_path, params: { provider: provider }
         end.to change(user.identities, :count).by(-1)
 
         expect(user.identities.map(&:provider)).not_to include(provider)
       end
 
       it "empties their associated username" do
-        delete "/users/remove_identity", params: { provider: provider }
+        delete users_remove_identity_path, params: { provider: provider }
 
-        expect(user.public_send("#{provider}_username")).to be(nil)
+        expect(user.public_send("#{provider}_username")).to be_nil
       end
 
       it "updates the profile_updated_at timestamp" do
         original_profile_updated_at = user.profile_updated_at
-        delete "/users/remove_identity", params: { provider: provider }
+        delete users_remove_identity_path, params: { provider: provider }
         expect(user.profile_updated_at.to_i).to be > original_profile_updated_at.to_i
       end
 
       it "redirects successfully to /settings/account" do
-        delete "/users/remove_identity", params: { provider: provider }
+        delete users_remove_identity_path, params: { provider: provider }
         expect(response).to redirect_to("/settings/account")
       end
 
       it "renders a successful response message" do
-        delete "/users/remove_identity", params: { provider: provider }
+        delete users_remove_identity_path, params: { provider: provider }
         auth_provider = Authentication::Providers.get!(provider)
 
         expected_notice = "Your #{auth_provider.official_name} account was successfully removed."
@@ -390,10 +396,11 @@ RSpec.describe "UserSettings", type: :request do
       it "redirects the user with an error if the corresponding provider has been since disabled" do
         providers = Authentication::Providers.available - [provider]
         allow(Authentication::Providers).to receive(:enabled).and_return(providers)
-        delete "/users/remove_identity", params: { provider: provider }
+        delete users_remove_identity_path, params: { provider: provider }
         expect(response).to redirect_to("/settings/account")
 
-        error = "An error occurred. Please try again or send an email to: #{SiteConfig.email_addresses[:default]}"
+        error =
+          "An error occurred. Please try again or send an email to: #{ForemInstance.contact_email}"
         expect(flash[:error]).to eq(error)
       end
 
@@ -401,8 +408,26 @@ RSpec.describe "UserSettings", type: :request do
         providers = Authentication::Providers.available.first(2)
         allow(user).to receive(:identities).and_return(user.identities.where(provider: providers))
 
-        delete "/users/remove_identity", params: { provider: providers.first }
+        delete users_remove_identity_path, params: { provider: providers.first }
         expect(response.body).not_to include("Remove OAuth Associations")
+      end
+
+      it "does not remove GitHub repositories if the removed identity is not GitHub" do
+        create(:github_repo, user: user)
+
+        expect do
+          delete users_remove_identity_path, params: { provider: :twitter }
+        end.not_to change(user.github_repos, :count)
+      end
+
+      it "removes GitHub repositories if the removed identity is GitHub" do
+        repo = create(:github_repo, user: user)
+
+        expect do
+          delete users_remove_identity_path, params: { provider: :github }
+        end.to change(user.github_repos, :count).by(-1)
+
+        expect(GithubRepo.exists?(id: repo.id)).to be(false)
       end
     end
 
@@ -415,21 +440,22 @@ RSpec.describe "UserSettings", type: :request do
       end
 
       it "sets the proper flash error message" do
-        delete "/users/remove_identity", params: { provider: provider }
+        delete users_remove_identity_path, params: { provider: provider }
 
-        error = "An error occurred. Please try again or send an email to: #{SiteConfig.email_addresses[:default]}"
+        error =
+          "An error occurred. Please try again or send an email to: #{ForemInstance.contact_email}"
         expect(flash[:error]).to eq(error)
       end
 
       it "does not delete any identities" do
         expect do
-          delete "/users/remove_identity", params: { provider: provider }
+          delete users_remove_identity_path, params: { provider: provider }
         end.not_to change(user.identities, :count)
       end
 
-      it "redirects successfully to /settings/account" do
-        delete "/users/remove_identity", params: { provider: provider }
-        expect(response).to redirect_to("/settings/account")
+      it "redirects successfully to the Settings-Account page" do
+        delete users_remove_identity_path, params: { provider: provider }
+        expect(response).to redirect_to(user_settings_path(:account))
       end
     end
   end

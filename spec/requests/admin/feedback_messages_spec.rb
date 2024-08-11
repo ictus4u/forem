@@ -1,19 +1,19 @@
 require "rails_helper"
 
-RSpec.describe "/admin/reports", type: :request do
+RSpec.describe "/admin/moderation/reports" do
   let(:feedback_message)  { create(:feedback_message, :abuse_report) }
   let(:user)              { create(:user) }
   let(:trusted_user)      { create(:user, :trusted) }
   let(:admin)             { create(:user, :super_admin) }
 
-  describe "GET /admin/reports" do
+  describe "GET /admin/moderation/reports" do
     let(:single_resource_admin) { create(:user, :single_resource_admin, resource: FeedbackMessage) }
 
     context "when the user is a single resource admin" do
       it "renders with status 200" do
         sign_in single_resource_admin
         get admin_reports_path
-        expect(response.status).to eq 200
+        expect(response).to have_http_status :ok
       end
     end
 
@@ -23,12 +23,12 @@ RSpec.describe "/admin/reports", type: :request do
         create(:reaction, category: "vomit", reactable: user, user: trusted_user)
         sign_in admin
         get admin_reports_path
-        expect(response.status).to eq 200
+        expect(response).to have_http_status :ok
       end
     end
   end
 
-  describe "POST /save_status" do
+  describe "POST /admin/moderation/reports/save_status" do
     context "when a valid request is made" do
       let(:save_status_params) do
         {
@@ -71,7 +71,6 @@ RSpec.describe "/admin/reports", type: :request do
         {
           feedback_message_id: send_email_params[:feedback_message_id],
           subject: send_email_params[:email_subject],
-          utm_campaign: send_email_params[:email_type],
           to: send_email_params[:email_to]
         }.stringify_keys
       end
@@ -87,6 +86,7 @@ RSpec.describe "/admin/reports", type: :request do
       end
 
       it "creates a new email message with the same params" do
+        allow(ForemInstance).to receive(:smtp_enabled?).and_return(true)
         post send_email_admin_reports_path, params: send_email_params
 
         expect(EmailMessage.last.attributes).to include(email_message_attributes)
@@ -94,7 +94,7 @@ RSpec.describe "/admin/reports", type: :request do
     end
   end
 
-  describe "POST /admin/reports/create_note" do
+  describe "POST /admin/moderation/reports/create_note" do
     context "when a valid request is made" do
       let(:note_params) do
         {

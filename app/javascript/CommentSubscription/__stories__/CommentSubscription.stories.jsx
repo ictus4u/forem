@@ -7,7 +7,7 @@ import {
 } from '../CommentSubscription';
 
 export default {
-  title: '4_App Components/Comment Subscription',
+  title: 'App Components/Comment Subscription',
   decorators: [withKnobs],
 };
 
@@ -27,9 +27,7 @@ export const Unsubscribed = () => (
   />
 );
 
-Unsubscribed.story = {
-  name: 'unsubscribed',
-};
+Unsubscribed.storyName = 'unsubscribed';
 
 export const Subscribed = () => (
   <CommentSubscription
@@ -42,9 +40,7 @@ export const Subscribed = () => (
   />
 );
 
-Subscribed.story = {
-  name: 'subscribed',
-};
+Subscribed.storyName = 'subscribed';
 
 export const SubscribedButNotDefault = () => (
   <CommentSubscription
@@ -57,6 +53,5 @@ export const SubscribedButNotDefault = () => (
   />
 );
 
-SubscribedButNotDefault.story = {
-  name: 'subscribed (with comment type other than the default',
-};
+SubscribedButNotDefault.storyName =
+  'subscribed (with comment type other than the default';
