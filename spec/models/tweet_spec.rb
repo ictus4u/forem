@@ -1,6 +1,6 @@
 require "rails_helper"
 
-RSpec.describe Tweet, type: :model, vcr: true do
+RSpec.describe Tweet, :vcr do
   let(:tweet_id) { "1018911886862057472" }
   let(:tweet_reply_id) { "1242938461784608770" }
   let(:retweet_id) { "1262395854469677058" }
@@ -87,6 +87,17 @@ RSpec.describe Tweet, type: :model, vcr: true do
 
         tweet = described_class.find_or_fetch(tweet_id)
         expect(tweet.user_id).to eq(user.id)
+      end
+
+      it "raises an error when Twitter key or secret are missing" do
+        allow(TwitterClient::Client)
+          .to receive(:status)
+          .and_raise(TwitterClient::Errors::BadRequest, "Bad Authentication data.")
+
+        expect do
+          described_class.find_or_fetch(tweet_id)
+        end.to raise_error(TwitterClient::Errors::BadRequest,
+                           "Authentication error; please contact your Forem admin about possible missing Twitter keys")
       end
     end
 

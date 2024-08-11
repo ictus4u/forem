@@ -3,8 +3,8 @@ class GlitchTag < LiquidTagBase
 
   PARTIAL = "liquids/glitch".freeze
 
-  REGISTRY_REGEXP = %r{https://(?:(?<subdomain>[\w\-]{1,110})\.)?glitch(?:\.me|\.com)(?:/edit/#!/)?(?<slug>[\w\-]{1,110})?(?<params>\?.*)?}
-  ID_REGEXP = /\A(?:^~)?(?<slug>[\w\-]{1,110})\Z/
+  REGISTRY_REGEXP = %r{https://(?:(?<subdomain>[\w-]{1,110})\.)?glitch(?:\.me|\.com)(?:/edit/#!/)?(?<slug>[\w-]{1,110})?(?<params>\?.*)?}
+  ID_REGEXP = /\A(?:^~)?(?<slug>[\w-]{1,110})\Z/
   REGEXP_OPTIONS = [REGISTRY_REGEXP, ID_REGEXP].freeze
   # last part of PATH_REGEX handles line & character numbers that may appear at path end
   PATH_REGEX = %r{path=(?<path>[\w/\-.]*)[\d:]*}
@@ -51,10 +51,6 @@ class GlitchTag < LiquidTagBase
     else
       match[:slug]
     end
-  end
-
-  def match_has_named_capture_group?(match, group_name)
-    match.names.include?(group_name)
   end
 
   def parse_options(options, match)
