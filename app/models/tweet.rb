@@ -48,6 +48,8 @@ class Tweet < ApplicationRecord
       retrieve_and_save_tweet(status_id)
     rescue TwitterClient::Errors::NotFound => e
       raise e, I18n.t("models.tweet.tweet_not_found")
+    rescue TwitterClient::Errors::BadRequest => e
+      raise e, I18n.t("models.tweet.authentication_error")
     end
 
     def retrieve_and_save_tweet(status_id)
@@ -56,11 +58,7 @@ class Tweet < ApplicationRecord
     end
 
     def create_tweet_from_api_status(status)
-      status = if status.retweeted_status.present?
-                 TwitterClient::Client.status(status.retweeted_status.id.to_s)
-               else
-                 status
-               end
+      status = TwitterClient::Client.status(status.retweeted_status.id.to_s) if status.retweeted_status.present?
 
       params = { twitter_id_code: status.id.to_s }
       tweet = Tweet.find_by(params) || new(params)
