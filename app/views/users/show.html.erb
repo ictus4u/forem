@@ -15,7 +15,7 @@
   </script>
 <% end %>
 
-<% cache "user-profile-header-area-#{@user.id}-#{@user.profile.cache_key_with_version}-#{user_signed_in?}-#{@user.badge_achievements_count}", expires_in: 10.days do %>
+<% cache "user-profile-header-area-#{@user.id}-#{@user.profile.cache_key_with_version}-#{@user.cache_key_with_version}-#{user_signed_in?}-#{@user.badge_achievements_count}", expires_in: 10.days do %>
   <style>
     :root {
       --profile-brand-color: <%= Color::CompareHex.new([user_colors(@user)[:bg], user_colors(@user)[:text]]).brightness(0.88) %>;
@@ -68,6 +68,7 @@
           <div class="items-center js-username-container mb-2">
             <h1 class="crayons-title lh-tight">
               <%= @user.name %>
+              <span class="ml-2"><%= subscription_icon(@user) %></span>
               <% if @user.spam? %>
                 &nbsp;<span class="c-indicator c-indicator--danger">Spam</span>
               <% end %>
