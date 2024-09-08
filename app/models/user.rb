@@ -19,7 +19,11 @@ class User < ApplicationRecord
       attr_accessor :_skip_creating_profile
 
       # All new users should automatically have a profile
-      after_create_commit -> { Profile.create(user: self) }, unless: :_skip_creating_profile
+      after_create_commit unless: :_skip_creating_profile do
+        Profile.find_or_create_by(user: self)
+      rescue ActiveRecord::RecordNotUnique
+        Rails.logger.warn("Profile already exists for user #{id}")
+      end
     end
   end
 
@@ -137,6 +141,7 @@ class User < ApplicationRecord
   validates :spent_credits_count, presence: true
   validates :subscribed_to_user_subscriptions_count, presence: true
   validates :unspent_credits_count, presence: true
+  validates :max_score, numericality: { greater_than_or_equal_to: 0 }
   validates :reputation_modifier, numericality: { greater_than_or_equal_to: 0, less_than_or_equal_to: 5 },
                                   presence: true
 
@@ -337,7 +342,7 @@ class User < ApplicationRecord
 
     cached_recent_pageview_article_ids = page_views.order("created_at DESC").limit(6).pluck(:article_id)
     tags = Article.where(id: cached_recent_pageview_article_ids).pluck(:cached_tag_list)
-      .map { |list| list.split(", ") }
+      .map { |list| list.to_s.split(", ") }
       .flatten.uniq.reject(&:empty?)
     tags + %w[career productivity ai git] # These are highly DEV-specific. Should be refactored later to be config'd
   end
@@ -376,6 +381,10 @@ class User < ApplicationRecord
     Rails.cache.fetch(cache_key, expires_in: 200.hours) do
       roles.pluck(:name)
     end
+  end
+
+  def cached_base_subscriber?
+    cached_role_names.include?("base_subscriber")
   end
 
   def processed_website_url

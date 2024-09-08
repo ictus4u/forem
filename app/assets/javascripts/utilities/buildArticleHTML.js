@@ -229,6 +229,9 @@ function buildArticleHTML(article, currentUserId = null) {
       picUrl = article.user.profile_image_90;
       profileUsername = article.user.username;
       userName = filterXSS(article.user.name);
+      if (article.user.cached_base_subscriber) {
+        userName = userName + ' <img class="subscription-icon" src="' + document.body.dataset.subscriptionIcon + '" alt="Subscriber" /> MAGOO';
+      }
     }
     var orgHeadline = '';
     var forOrganization = '';
@@ -299,7 +302,9 @@ function buildArticleHTML(article, currentUserId = null) {
               <span class="crayons-avatar crayons-avatar--xl mr-2 shrink-0">
                 <img src="${picUrl}" class="crayons-avatar__image" alt="" loading="lazy" />
               </span>
-              <span class="crayons-link crayons-subtitle-2 mt-5">${userName}</span>
+              <span class="crayons-link crayons-subtitle-2 mt-5">
+                ${userName}
+              </span>
             </a>
           </div>
           <div class="print-hidden">

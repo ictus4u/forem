@@ -14,6 +14,7 @@ class NotifyMailer < ApplicationMailer
                                                                                    omission: "...", escape: false)
 
     @user = @comment.parent_user
+    return if @user.email.blank?
     return if RateLimitChecker.new.limit_by_email_recipient_address(@user.email)
 
     @unsubscribe = generate_unsubscribe_token(@user.id, :email_comment_notifications)
@@ -144,6 +145,14 @@ class NotifyMailer < ApplicationMailer
     @user = params[:user]
 
     subject = I18n.t("mailers.notify_mailer.trusted",
+                     community: Settings::Community.community_name)
+    mail(to: @user.email, subject: subject)
+  end
+
+  def base_subscriber_role_email
+    @user = params[:user]
+
+    subject = I18n.t("mailers.notify_mailer.base_subscriber",
                      community: Settings::Community.community_name)
     mail(to: @user.email, subject: subject)
   end
